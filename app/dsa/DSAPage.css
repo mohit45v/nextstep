@@ -1,0 +1,227 @@
+/* ============================================================
+   DSA Hub Page — Dark Theme (#2563EB Primary Accent)
+   ============================================================ */
+
+.dsa-app {
+  --blue-primary: #2563eb;
+  --blue-hover: #1d4ed8;
+  --blue-light: rgba(37, 99, 235, 0.15);
+  --blue-border: rgba(37, 99, 235, 0.3);
+  --blue-glow: rgba(37, 99, 235, 0.25);
+
+  --bg-dark: #0f172a;
+  --bg-card: #1e293b;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --border-dark: #334155;
+
+  --easy-color: #10b981;
+  --easy-bg: rgba(16, 185, 129, 0.15);
+  --medium-color: #f59e0b;
+  --medium-bg: rgba(245, 158, 11, 0.15);
+  --hard-color: #ef4444;
+  --hard-bg: rgba(239, 68, 68, 0.15);
+
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dsa-app * {
+  box-sizing: border-box;
+}
+
+/* Header & Top Bar */
+.dsa-navbar {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-dark);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dsa-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+}
+
+.dsa-brand-logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2563eb, #60a5fa);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 18px;
+  box-shadow: 0 4px 12px var(--blue-glow);
+}
+
+.dsa-brand-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.dsa-brand-title span {
+  color: #60a5fa;
+}
+
+.dsa-nav-modes {
+  display: flex;
+  background: #0f172a;
+  padding: 4px;
+  border-radius: 12px;
+  gap: 4px;
+}
+
+.dsa-mode-tab {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dsa-mode-tab.active {
+  background: var(--blue-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 12px var(--blue-glow);
+}
+
+/* Branch Strip */
+.dsa-branch-strip {
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-dark);
+  padding: 12px 32px;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.dsa-branch-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border-dark);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dsa-branch-btn.active {
+  background: var(--blue-primary);
+  color: #ffffff;
+  border-color: var(--blue-primary);
+}
+
+/* Main Container */
+.dsa-container {
+  display: flex;
+  flex: 1;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 32px;
+  gap: 24px;
+}
+
+.dsa-sidebar {
+  width: 340px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dsa-topic-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-dark);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dsa-topic-card.active {
+  border-color: var(--blue-primary);
+  background: linear-gradient(135deg, #1e293b, var(--blue-light));
+}
+
+.dsa-topic-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--blue-light);
+  color: #93c5fd;
+  border: 1px solid var(--blue-border);
+}
+
+.dsa-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+  border-radius: 3px;
+}
+
+.dsa-main {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border-dark);
+  border-radius: 16px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dsa-search-input {
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-dark);
+  background: #0f172a;
+  font-size: 14px;
+  color: var(--text-main);
+  outline: none;
+}
+
+.dsa-search-input:focus {
+  border-color: var(--blue-primary);
+}
+
+.dsa-problem-card {
+  background: #0f172a;
+  border: 1px solid var(--border-dark);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dsa-checkbox.checked {
+  background: var(--blue-primary);
+  border-color: var(--blue-primary);
+}
+
+.dsa-problem-title-text {
+  color: var(--text-main);
+  text-decoration: none;
+}
