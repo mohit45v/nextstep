@@ -1,22 +1,51 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import "./NavDrawer.css";
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { 
+  X, 
+  ChevronDown, 
+  ChevronRight, 
+  Compass, 
+  BookOpen, 
+  Building2, 
+  Timer, 
+  CheckSquare, 
+  Zap, 
+  BarChart3, 
+  Flame, 
+  Map,
+  FileText,
+  Mic,
+  LayoutDashboard,
+  Target,
+  Bot,
+  Users,
+  Award,
+  Globe
+} from 'lucide-react';
+import './NavDrawer.css';
 
 interface NavDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   currentBranch?: string;
   onSelectBranch?: (branch: string) => void;
+  readinessScore?: number;
+  streakDays?: number;
 }
 
-export default function NavDrawer({
+export const NavDrawer: React.FC<NavDrawerProps> = ({
   isOpen,
   onClose,
-  currentBranch,
+  currentBranch = 'All Branches',
   onSelectBranch,
-}: NavDrawerProps) {
+  readinessScore = 78,
+  streakDays = 14
+}) => {
   const router = useRouter();
+  const [isAptitudeExpanded, setIsAptitudeExpanded] = useState<boolean>(true);
+  const [isDsaExpanded, setIsDsaExpanded] = useState<boolean>(true);
 
   const handleBranchClick = (branch: string) => {
     onClose();
@@ -32,10 +61,20 @@ export default function NavDrawer({
     router.push(path);
   };
 
+  const branches = [
+    { name: 'All Branches', icon: '📚' },
+    { name: 'CS & IT', icon: '💻' },
+    { name: 'AIDS', icon: '🤖' },
+    { name: 'Electrical', icon: '⚡' },
+    { name: 'Mechanical', icon: '⚙️' },
+    { name: 'Civil', icon: '🏗️' }
+  ];
+
   return (
-    <div className={`nav-drawer-overlay ${isOpen ? "open" : ""}`} onClick={onClose}>
-      <div className="nav-drawer" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+    <div className={`nav-drawer-overlay ${isOpen ? 'open' : ''}`} onClick={onClose}>
+      <aside className="nav-drawer" onClick={(e) => e.stopPropagation()}>
+        
+        {/* Drawer Header */}
         <div className="nav-drawer-header">
           <div className="nav-drawer-title">
             <div
@@ -43,209 +82,166 @@ export default function NavDrawer({
                 width: 34,
                 height: 34,
                 borderRadius: 10,
-                background: "linear-gradient(135deg, #6c5ce7, #a29bfe)",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                background: 'linear-gradient(135deg, #2563eb, #60a5fa)',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 fontWeight: 800,
                 fontSize: 16,
               }}
             >
               N
             </div>
-            Nextstep <span>Modules</span>
+            NextStep <span>Placement Engine</span>
           </div>
-          <button className="nav-drawer-close" onClick={onClose} aria-label="Close Drawer">
-            ✕
+
+          <button onClick={onClose} className="nav-drawer-close" aria-label="Close Drawer">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="nav-drawer-content">
-          {/* Main Navigation */}
+        {/* Navigation Items Scroll Area */}
+        <div className="nav-drawer-content space-y-4">
+          
+          {/* Main Overview */}
           <div>
             <div className="nav-drawer-section-title">Overview</div>
             <div className="nav-drawer-menu">
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/")}>
-                <span className="nav-drawer-icon">🏠</span>
+              <button className="nav-drawer-item active" onClick={() => handleNavClick('/')}>
+                <LayoutDashboard className="w-4 h-4 text-[#60A5FA]" />
                 <span>Dashboard Home</span>
               </button>
             </div>
           </div>
 
-          {/* 1. 🤖 AI & Career Acceleration Suite */}
+          {/* 1. AI Career Acceleration Suite */}
           <div>
             <div className="nav-drawer-section-title">1. AI Career Suite</div>
             <div className="nav-drawer-menu">
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🤖</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Bot className="w-4 h-4 text-[#60A5FA]" />
                 <span>AI Mentor & Analytics</span>
                 <span className="nav-drawer-badge">Credits</span>
               </button>
 
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">📄</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <FileText className="w-4 h-4 text-[#60A5FA]" />
                 <span>AI Resume & ATS Checker</span>
               </button>
 
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🎯</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Target className="w-4 h-4 text-[#60A5FA]" />
                 <span>JD Skill Gap Analyzer</span>
               </button>
 
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🗺️</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Map className="w-4 h-4 text-[#60A5FA]" />
                 <span>Roadmap Generator</span>
               </button>
             </div>
           </div>
 
-          {/* 2. 🎯 Practice & Preparation Hub */}
+          {/* 2. DSA Engineering Hub */}
           <div>
-            <div className="nav-drawer-section-title">2. Practice & Preparation</div>
+            <div className="nav-drawer-section-title">2. DSA Engineering Hub</div>
             <div className="nav-drawer-menu">
-              <button
-                className={`nav-drawer-item ${currentBranch ? "active" : ""}`}
-                onClick={() => handleNavClick("/dsa")}
-              >
-                <span className="nav-drawer-icon">⚡</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Zap className="w-4 h-4 text-[#60A5FA]" />
                 <span>DSA Engineering Hub</span>
                 <span className="nav-drawer-badge">Live API</span>
               </button>
+            </div>
 
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🎙️</span>
-                <span>Mock Interview (Faculty/AI)</span>
-              </button>
+            {/* Branch Sub-menu */}
+            <div className="pl-3 pt-1 space-y-1">
+              {branches.map((b) => (
+                <button
+                  key={b.name}
+                  onClick={() => handleBranchClick(b.name)}
+                  className={`nav-drawer-item ${currentBranch === b.name ? 'active' : ''}`}
+                >
+                  <span className="text-xs">{b.icon}</span>
+                  <span>{b.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
 
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">📝</span>
+          {/* 3. Aptitude & Practice Preparation */}
+          <div>
+            <div className="nav-drawer-section-title">3. Aptitude & Practice</div>
+            <div className="nav-drawer-menu">
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <BookOpen className="w-4 h-4 text-[#60A5FA]" />
                 <span>Aptitude Practice</span>
               </button>
-
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🗣️</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Mic className="w-4 h-4 text-[#60A5FA]" />
+                <span>Mock Interview (Faculty/AI)</span>
+              </button>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Users className="w-4 h-4 text-[#60A5FA]" />
                 <span>Virtual GD Practice</span>
               </button>
             </div>
           </div>
 
-          {/* Sub-section: DSA Engineering Branches */}
+          {/* 4. Placement & TPO */}
           <div>
-            <div className="nav-drawer-section-title">DSA by Engineering Branch</div>
+            <div className="nav-drawer-section-title">4. Placement & TPO</div>
             <div className="nav-drawer-menu">
-              <button
-                className={`nav-drawer-item ${currentBranch === "CS & IT" ? "active" : ""}`}
-                onClick={() => handleBranchClick("CS & IT")}
-              >
-                <span className="nav-drawer-icon">💻</span>
-                <span>Computer & IT</span>
-              </button>
-
-              <button
-                className={`nav-drawer-item ${currentBranch === "AIDS" ? "active" : ""}`}
-                onClick={() => handleBranchClick("AIDS")}
-              >
-                <span className="nav-drawer-icon">🤖</span>
-                <span>AI & Data Science (AIDS)</span>
-              </button>
-
-              <button
-                className={`nav-drawer-item ${currentBranch === "Electrical" ? "active" : ""}`}
-                onClick={() => handleBranchClick("Electrical")}
-              >
-                <span className="nav-drawer-icon">⚡</span>
-                <span>Electrical Engineering</span>
-              </button>
-
-              <button
-                className={`nav-drawer-item ${currentBranch === "Mechanical" ? "active" : ""}`}
-                onClick={() => handleBranchClick("Mechanical")}
-              >
-                <span className="nav-drawer-icon">⚙️</span>
-                <span>Mechanical Engineering</span>
-              </button>
-
-              <button
-                className={`nav-drawer-item ${currentBranch === "Civil" ? "active" : ""}`}
-                onClick={() => handleBranchClick("Civil")}
-              >
-                <span className="nav-drawer-icon">🏗️</span>
-                <span>Civil Engineering</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 3. 💼 Placement & Company Portal */}
-          <div>
-            <div className="nav-drawer-section-title">3. Placement & TPO</div>
-            <div className="nav-drawer-menu">
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🏢</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Building2 className="w-4 h-4 text-[#60A5FA]" />
                 <span>Company Requirements</span>
               </button>
-
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">📅</span>
-                <span>Company Status (Past/Upcoming)</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Timer className="w-4 h-4 text-[#60A5FA]" />
+                <span>Company Status Tracker</span>
               </button>
-
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🎓</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <LayoutDashboard className="w-4 h-4 text-[#60A5FA]" />
                 <span>TPO Coordinator Portal</span>
               </button>
             </div>
           </div>
 
-          {/* 4. 👥 Experience & Sessions */}
+          {/* 5. Alumni & Community */}
           <div>
-            <div className="nav-drawer-section-title">4. Experience & Community</div>
+            <div className="nav-drawer-section-title">5. Alumni & Community</div>
             <div className="nav-drawer-menu">
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">💬</span>
-                <span>Student Experiences</span>
-              </button>
-
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">👥</span>
-                <span>Sessions (Mentor / HR)</span>
-              </button>
-
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🌐</span>
+              <button className="nav-drawer-item" onClick={() => handleNavClick('/dsa')}>
+                <Globe className="w-4 h-4 text-[#60A5FA]" />
                 <span>Alumni Network & Jobs</span>
               </button>
             </div>
           </div>
 
-          {/* 5. 📊 Progress & Leaderboard */}
-          <div>
-            <div className="nav-drawer-section-title">5. Progress & Analytics</div>
-            <div className="nav-drawer-menu">
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🏆</span>
-                <span>Leaderboard</span>
-              </button>
+        </div>
 
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🟩</span>
-                <span>Progress HeatMap</span>
-              </button>
+        {/* Drawer Footer User Card */}
+        <div className="nav-drawer-footer">
+          <div className="flex items-center justify-between bg-[#1E293B] p-2.5 rounded-xl border border-[#334155]">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-8 h-8 rounded-full bg-[#2563EB]/30 text-[#60A5FA] font-bold text-xs flex items-center justify-center border border-[#2563EB]/40">
+                AV
+              </div>
+              <div className="space-y-0.5 text-left">
+                <span className="font-bold text-xs text-white block leading-none">Alex Vance</span>
+                <span className="text-[10px] text-emerald-400 font-semibold">Ready: {readinessScore}%</span>
+              </div>
+            </div>
 
-              <button className="nav-drawer-item" onClick={() => handleNavClick("/dsa")}>
-                <span className="nav-drawer-icon">🔥</span>
-                <span>Streaks & Notifications</span>
-              </button>
+            <div className="flex items-center space-x-1 text-orange-400 bg-orange-950/40 px-2 py-1 rounded-lg text-xs font-bold border border-orange-800/40">
+              <Flame className="w-3.5 h-3.5 fill-orange-500" />
+              <span>{streakDays}d</span>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="nav-drawer-footer">
-          Nextstep Placement Engine • Soft Purple UI
-        </div>
-      </div>
+      </aside>
     </div>
   );
-}
+};
+
+export default NavDrawer;
