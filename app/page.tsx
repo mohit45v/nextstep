@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import DashboardMain from "./components/DashboardMain/DashboardMain";
 import { Navbar, ScreenType } from './components/Navbar';
 import { NavDrawer } from './components/NavDrawer';
 import { AptitudeDashboard } from './components/AptitudeDashboard';
@@ -17,7 +18,7 @@ export default function Home() {
   const [selectedTopicId, setSelectedTopicId] = useState<string | undefined>(undefined);
   const [selectedExamPack, setSelectedExamPack] = useState<CompanyTestPack | null>(null);
   const [lastExamResults, setLastExamResults] = useState<any | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(true);
+  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
   const handleNavigate = (screen: ScreenType) => {
     setCurrentScreen(screen);
@@ -45,12 +46,8 @@ export default function Home() {
       
       {/* Left Navigation Drawer */}
       <NavDrawer
-        currentScreen={currentScreen}
-        onSelectScreen={handleNavigate}
         isOpen={isDrawerOpen}
-        onToggleOpen={() => setIsDrawerOpen(!isDrawerOpen)}
-        readinessScore={78}
-        streakDays={5}
+        onClose={() => setIsDrawerOpen(false)}
       />
 
       {/* Top Header Navbar */}
@@ -59,16 +56,13 @@ export default function Home() {
         onSelectScreen={handleNavigate}
         onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
         readinessScore={78}
-        streakDays={5}
+        streakDays={14}
       />
 
-      {/* Main Content Area (offset by left drawer width on desktop) */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 lg:pl-72">
+      {/* Main Content Area */}
+      <main className="flex-1 w-full mx-auto">
         {currentScreen === 'dashboard' && (
-          <AptitudeDashboard
-            onNavigate={handleNavigate}
-            onStartQuiz={handleStartTopicPractice}
-          />
+          <DashboardMain />
         )}
 
         {currentScreen === 'practice' && (
@@ -111,14 +105,14 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-[#131927] border-t border-[#262F40] py-6 mt-12 text-center text-xs text-slate-400 lg:pl-72">
+      <footer className="bg-[#131927] border-t border-[#262F40] py-6 mt-12 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center space-x-2">
-            <span className="font-bold text-white">NextStep Aptitude Engine</span>
+            <span className="font-bold text-white">NextStep Engine</span>
             <span>•</span>
             <span>AI Placement & Career Development Platform</span>
           </div>
-          <p>© 2026 NextStep. Dark Mode Soft Purple Palette.</p>
+          <p>© 2026 NextStep. Dark Mode Royal Blue Palette.</p>
         </div>
       </footer>
 
