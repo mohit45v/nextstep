@@ -100,6 +100,59 @@ h3 {
   background: var(--color-ink-subtle);
 }
 
+/* ---------------------------------------------------------------------------
+   Animation
+   Every keyframe here is decorative. The reduced-motion block at the bottom
+   neutralises all of them, and the JS animation loop in HeroPreview checks the
+   same media query before it starts — CSS alone would leave the timers running.
+--------------------------------------------------------------------------- */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Sweeps a soft highlight across a heading once on load. */
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+
+/**
+ * Faint dot grid for hero sections. Pure CSS — no image request, and it scales
+ * to any viewport. Masked so it fades out rather than ending on a hard edge.
+ */
+.dot-grid {
+  background-image: radial-gradient(circle at 1px 1px, var(--color-line-strong) 1px, transparent 0);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 40%, transparent 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

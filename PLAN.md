@@ -1,9 +1,14 @@
 # NextStep — Implementation Plan
 
 **Pace:** weekends only, ~8–10 hours across Saturday + Sunday.
-**Span:** 10 weekends, 15 Aug → 18 Oct 2026.
+**Span:** 13 weekends, 15 Aug → 8 Nov 2026.
 **Goal:** a deployed platform running on real data, built in a way that teaches
 you the stack rather than just producing files.
+
+**Three headline features** are scheduled from Weekend 5 onward: an open-licensed
+question bank, an in-browser code runner, and an animated algorithm visualiser.
+They all hang off a user and a database, so Weekends 1–4 come first — building
+them before persistence means building them twice.
 
 Each weekend has a **Saturday** block (build), a **Sunday** block (build +
 consolidate), a **Learn** section, and a **Done when** checklist. Do not move on
@@ -149,131 +154,273 @@ dynamic route segments · aggregation with `groupBy`.
 
 ---
 
-## Weekend 5 — DSA hub on real data (12–13 Sep)
+## Weekend 5 — Question bank: import & review (12–13 Sep)
+
+Six questions is not a placement platform. This weekend gives you a supply of
+properly-licensed questions **and** the editorial control to keep them good.
+
+> **Not IndiaBix.** Their content is copyrighted and scraping it would infringe
+> copyright and likely breach the IT Act 2000. Do not do it. The two datasets
+> below are openly licensed and do the job.
+
+| Dataset | Licence | Gives you |
+| --- | --- | --- |
+| [AQuA-RAT](https://github.com/google-deepmind/AQuA) | **Apache 2.0** (commercial use fine) | ~100k algebra word problems, MCQ + step-by-step rationale |
+| [LogiQA 2.0](https://github.com/csitfun/LogiQA2.0_Chinese) | CC BY-NC-SA 4.0 | ~8.7k logical reasoning MCQs |
 
 ### Saturday
-- Models: `DsaTopic`, `DsaProblem`, `ProblemSolve`.
+
+- Add `status` to `Question`: `DRAFT | APPROVED | REJECTED`, plus `source`,
+  `sourceId`, `licence`. Only `APPROVED` is ever served to students.
+- Write `scripts/import-aqua.ts` — streams the AQuA JSONL, maps each item to a
+  `Question` with `status: DRAFT`, dedupes on `sourceId`, converts the `rationale`
+  field into your existing `explanation`.
+- Import a slice (say 500), not all 100k.
+
+### Sunday
+
+- Build `/admin/questions` behind `requireRole("ADMIN")`: list drafts, edit
+  text/options/explanation, approve or reject.
+- Approve ~100 good ones. **Read every one you approve.**
+- Add `/attributions` listing each dataset, its licence and its authors.
+
+### Learn
+
+Why AQuA is *training* data, not exam content — crowd-sourced rationales, uneven
+quality, some wrong answers. Streaming large files instead of `JSON.parse` on
+100MB. Idempotent imports. What open licences actually require of you.
+
+### Done when
+
+- [ ] A student only ever sees `APPROVED` questions
+- [ ] Re-running the importer creates zero duplicates
+- [ ] `/attributions` credits both datasets correctly
+- [ ] You have personally read every approved question
+
+---
+
+## Weekend 6 — DSA hub on real data (19–20 Sep)
+
+### Saturday
+
+- Models: `DsaTopic`, `DsaProblem`, `ProblemSolve` (`@@unique([userId, problemId])`).
 - Seed the curated problems; rewrite `/api/dsa/topics` and `.../problems`.
 
 ### Sunday
-- Make the solved checkbox persist per user (it currently only PATCHes into a
-  mock handler).
-- Cache the Codeforces call — you are hitting a third-party API on every
-  keystroke-triggered refetch. Use `next: { revalidate: 3600 }`.
+
+- Make the solve tick persist per user. The UI currently says plainly that it
+  does not — delete that notice once it does.
+- Keep the Codeforces route cached (already `revalidate: 300`).
 
 ### Learn
-Composite unique constraints (`@@unique([userId, problemId])`) · optimistic UI ·
-Next.js fetch caching and revalidation · being a good API citizen.
+
+Composite unique constraints · optimistic UI with rollback on failure · why the
+old no-op PATCH route was worse than no route at all.
 
 ### Done when
-- [ ] Ticking a problem solved survives a refresh and a re-login
-- [ ] Codeforces is called at most once an hour per tag
+
+- [ ] Ticking a problem survives a refresh and a re-login
+- [ ] The "ticks aren't saved yet" notice is gone because it is no longer true
 
 ---
 
-## Weekend 6 — Streak & leaderboard (19–20 Sep)
+## Weekend 7 — Code runner, part 1: the seam (26–27 Sep)
+
+[CodeBox](https://github.com/hiteshchoudhary/Codebox) is MIT-licensed and exposes
+**Judge0-compatible endpoints**. That compatibility is the whole strategy: build
+against the Judge0 API shape and the backend becomes swappable.
 
 ### Saturday
-- `DailyActivity` model (`@@unique([userId, date])`).
-- Record activity whenever an attempt or solve happens.
-- Make `StreakHeatmap` render real data.
+
+- Define `src/lib/code-runner/types.ts` — `submit(source, languageId, stdin)` →
+  `{ stdout, stderr, status, timeMs, memoryKb }`. Nothing above this layer knows
+  which engine is running.
+- Implement `Judge0Runner` against the documented Judge0 REST shape.
+- Config via env: `CODE_RUNNER_URL`, `CODE_RUNNER_TOKEN`.
 
 ### Sunday
-- Real leaderboard from aggregated scores, filterable by branch.
-- Compute the current streak correctly — mind the timezone. Store dates as UTC
-  midnight and convert for display, or you will get off-by-one bugs at 11pm IST.
+
+- Run CodeBox locally with `docker-compose`. Point `CODE_RUNNER_URL` at it.
+- Build `/playground`: Monaco editor, language picker, stdin box, output panel.
+- Handle the states properly — queued, running, timed out, compile error,
+  runtime error. Each needs distinct UI; "something went wrong" is useless.
 
 ### Learn
-Time and timezones (the classic source of production bugs) · SQL aggregation ·
-database indexes and why the leaderboard needs one.
+
+Programming against an interface rather than a vendor · why untrusted code needs
+a sandbox (no network, memory/CPU/time caps, non-root) · polling vs webhooks.
 
 ### Done when
+
+- [ ] You can run Python, JS, C++ and Java from the browser and see real output
+- [ ] An infinite loop times out cleanly instead of hanging the request
+- [ ] Swapping `CODE_RUNNER_URL` to a different Judge0 needs no code change
+
+---
+
+## Weekend 8 — Code runner, part 2: judged problems (3–4 Oct)
+
+### Saturday
+
+- Models: `CodingProblem`, `TestCase` (with `isHidden`), `Submission`.
+- Write 5 problems yourself with 3–5 test cases each. Two Sum, Valid Anagram,
+  Contains Duplicate, Best Time to Buy/Sell, Valid Parentheses.
+
+### Sunday
+
+- Judge endpoint: run every test case, compare trimmed stdout, return
+  pass/fail per case. **Never send hidden test cases to the browser.**
+- Submission history per problem.
+
+### Learn
+
+Why hidden tests must stay server-side · batch execution · trailing-whitespace
+bugs in output comparison (this will bite you) · storing submissions cheaply.
+
+### Done when
+
+- [ ] Solving a problem runs real tests and reports which failed
+- [ ] Hidden test inputs never appear in the network tab
+- [ ] A wrong answer shows the failing visible case, not just "failed"
+
+---
+
+## Weekends 9–11 — The visualiser (10 Oct – 25 Oct)
+
+The most valuable thing you will build, and the most work. Modelled on
+[dsa.chaicode.com](https://dsa.chaicode.com) — animated step-through with
+narration, and **multiple approaches compared side by side**.
+
+That comparison is the part that teaches. Watching op counts fall from 269,141
+to 1,000 as you switch approach is a lesson a complexity table cannot give.
+
+### Weekend 9 — the engine
+
+The insight: an algorithm visualisation is **a list of frames**, not an
+animation. Run the algorithm once, recording a frame at each meaningful step,
+then let the UI scrub through them. No `setTimeout` choreography.
+
+```ts
+interface Frame {
+  arrays: { name: string; values: number[]; }[];
+  pointers: { label: string; index: number; colour: string }[];
+  highlights: { index: number; kind: "compare" | "match" | "discard" }[];
+  narration: string;   // "4 + 11 = 15 > 14 — move right in"
+  opCount: number;     // cumulative, for the comparison view
+}
+```
+
+- Build the recorder, the `Frame` renderer (SVG), and transport controls:
+  play, pause, step forward/back, scrub, speed.
+- Keyboard control and `prefers-reduced-motion` support.
+
+### Weekend 10 — patterns
+
+Implement as recorders, each emitting frames:
+
+1. **Two pointers** — two-sum on a sorted array
+2. **Sliding window** — longest substring without repeating characters
+3. **Binary search** — with the `lo`/`hi`/`mid` collapse
+
+### Weekend 11 — the comparison view
+
+- Each problem gets 2–3 approaches (brute force → optimised).
+- Tabs to switch; time/space complexity and **measured op count at n = 1,000**
+  update as you switch.
+- Op counts come from the recorder, not a lookup table — they are measured, the
+  same way everything else in this app now is.
+
+### Learn
+
+Modelling animation as data · SVG and transforms · `requestAnimationFrame` vs
+CSS transitions · accessibility for motion · measuring work instead of asserting
+it.
+
+### Done when
+
+- [ ] You can scrub any visualisation forward and back with no glitches
+- [ ] Switching approach updates complexity *and* a measured op count
+- [ ] It respects `prefers-reduced-motion`
+- [ ] A classmate watches two-pointers once and gets it
+
+---
+
+## Weekend 12 — Streaks, leaderboard & polish (31 Oct – 1 Nov)
+
+### Saturday
+
+- `DailyActivity` (`@@unique([userId, date])`), written on every attempt,
+  solve and submission. The dashboard heatmap becomes real.
+- Streak calculation. **Mind the timezone** — store UTC midnight, convert for
+  display, or practising at 11:30pm IST lands on the wrong day.
+
+### Sunday
+
+- Leaderboard from aggregated scores, filterable by branch. Add the index.
+- Error boundaries (`error.tsx`, `loading.tsx`) across route groups.
+- Rate-limit the code runner per user — it executes arbitrary code, so it is the
+  one endpoint where abuse actually costs you money.
+
+### Done when
+
 - [ ] The heatmap darkens on days you actually practised
-- [ ] Your leaderboard rank changes when you complete a test
 - [ ] Practising at 11:30pm IST counts for the right day
+- [ ] Hammering the runner gets throttled, not billed
 
 ---
 
-## Weekend 7 — Roles: student / faculty / TPO (26–27 Sep)
+## Weekend 13 — Testing, CI & deploy (7–8 Nov)
 
 ### Saturday
-- Build `/tpo` behind `requireRole("TPO", "ADMIN")`.
-- Student roster with branch and readiness filters.
 
-### Sunday
-- Faculty view: review student attempts, leave feedback.
-- Audit every API route for missing role checks. Write down what each one allows.
-
-### Learn
-Authorization vs authentication · the principle of least privilege · why UI
-hiding is not security.
-
-### Done when
-- [ ] A STUDENT hitting `/tpo` is redirected, not shown a hidden page
-- [ ] Every API route has an explicit auth decision
-
----
-
-## Weekend 8 — Resume & ATS (3–4 Oct)
-
-### Saturday
-- `Resume` model; a builder form at `/resume`.
-- PDF export.
-
-### Sunday
-- ATS keyword scoring against a job description.
-- If you wire in a Claude API call for suggestions, keep the key server-side and
-  rate-limit it against the user's `credits` field.
-
-### Learn
-File generation · never exposing API keys to the browser · usage metering.
-
-### Done when
-- [ ] You can produce your own real resume as a PDF
-- [ ] The API key never appears in the network tab
-
----
-
-## Weekend 9 — Companies, drives & notifications (10–11 Oct)
-
-### Saturday
-- `Company`, `Drive`, `Application` models. Replace the companies mock routes.
-- Eligibility logic (CGPA, branch, backlogs) as a pure, testable function.
-
-### Sunday
-- `Notification` model + a bell in the Navbar.
-- Notify on new drives matching a student's branch.
-
-### Learn
-Modelling business rules · keeping logic pure so it can be tested.
-
-### Done when
-- [ ] A drive only appears to eligible students
-- [ ] Eligibility is a function you could unit test
-
----
-
-## Weekend 10 — Testing, CI & deploy (17–18 Oct)
-
-### Saturday
-- Add **Vitest**; test the eligibility rules, scoring and streak logic first —
-  they are pure functions with real consequences if wrong.
+- **Vitest.** Test the pure functions first: streak calculation, output
+  comparison, op counters, scoring. These have real consequences if wrong.
 - GitHub Actions running `typecheck`, `lint`, `test` on every push.
 
 ### Sunday
-- Deploy to Vercel. Add production env vars. Add the production redirect URI to
-  the Google console (`https://<your-app>.vercel.app/api/auth/callback/google`).
-- Run a real sign-in on production with your Terna account.
-- Write the final README section and record a short demo.
 
-### Learn
-What is worth testing and what is not · CI · environments and secrets ·
-production vs preview deploys.
+- Deploy the Next.js app to Vercel. Add production env vars and the production
+  Google callback URL.
+- **The code runner cannot go on Vercel** — it needs Docker and long-running
+  processes. Either put CodeBox on a VPS (Oracle Cloud's free ARM tier is worth
+  checking) and point `CODE_RUNNER_URL` at it, or ship with the playground
+  disabled behind a feature flag until you have a host.
+- Verify a real Terna sign-in on production, and that a non-Terna account still
+  cannot get in.
 
 ### Done when
+
 - [ ] CI is green on `main`
-- [ ] A classmate can sign in on the live URL with their Terna email
-- [ ] A non-Terna account still cannot get in — **verify this on production**
+- [ ] A classmate signs in on the live URL with their Terna email
+- [ ] A non-Terna account is refused **on production**
+- [ ] Either the runner works in production, or it is cleanly flagged off
+
+---
+
+## Deferred
+
+From the original sixteen-module vision, these are parked. They are real
+features, but they are not what makes this project distinctive, and a
+half-built portal is worth less than three finished ones:
+
+- TPO / faculty portal and role-based dashboards
+- Resume builder and ATS checker
+- Company drives, eligibility rules and notifications
+- Alumni network, mock interviews, virtual GD
+
+Pick them up after Weekend 13 if you still want them.
+
+---
+
+## A note on scope
+
+This is thirteen weekends — roughly three months. The compiler, the question
+bank and the visualiser are each a small project in their own right.
+
+If you start slipping, cut in this order: visualiser comparison view → code
+runner judged problems → leaderboard. Protect Weekends 1–4 absolutely. An app
+where sign-in works and attempts are saved beats an app with three impressive
+half-features and no persistence.
 
 ---
 
@@ -307,16 +454,21 @@ writing. If not, you now have a good question to ask.
 
 Pick these up in spare time, or slot them into a weekend that finishes early:
 
-1. **No error boundaries.** Add `error.tsx` and `loading.tsx` to the route groups.
-2. **No rate limiting** on any API route.
-3. **Only 6 aptitude questions exist**, across 6 of the 8 topics. Coding &
-   Decoding and Reading Comprehension have none and are shown as "no questions
-   yet". Writing more questions is the highest-value non-code work you can do —
-   the app is only as useful as its bank.
-4. **DSA solve ticks aren't persisted.** The checkbox works for the current
-   visit only; the screen says so plainly. Weekend 5 fixes it.
-5. **`README.md` demo section** — worth adding before you show this to
-   recruiters.
+1. **`README.md` demo section** — screenshots and a live link, worth adding
+   before you show this to recruiters.
+2. **No `NOTES.md` yet.** Start one on Weekend 1; see Working habits above.
+3. **Mobile check.** The layouts are responsive but have only been viewed at
+   desktop width. Walk every screen at 375px once.
+
+Already scheduled, listed here only so you know where they went:
+
+| Gap | Fixed in |
+| --- | --- |
+| Only 6 questions exist (2 topics have none) | Weekend 5 |
+| DSA solve ticks not persisted | Weekend 6 |
+| No error boundaries | Weekend 12 |
+| No rate limiting | Weekend 12 |
+| Attempts vanish on refresh | Weekend 4 |
 
 ### Fixed on 9 Aug (UI rebuild)
 

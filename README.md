@@ -213,6 +213,23 @@ measured, the screen says so instead of inventing one.
 Attempts are not written to the database yet, so results vanish on refresh.
 That is Weekend 4 in [PLAN.md](PLAN.md).
 
+### Planned
+
+Three larger features are scheduled from Weekend 5 (see [PLAN.md](PLAN.md)):
+
+- **Question bank** — importer for [AQuA-RAT](https://github.com/google-deepmind/AQuA)
+  (Apache 2.0) and [LogiQA 2.0](https://github.com/csitfun/LogiQA2.0_Chinese)
+  (CC BY-NC-SA 4.0), behind a draft/approve review screen so nothing unreviewed
+  reaches a student. Both datasets require attribution — an `/attributions` page
+  ships with the importer.
+- **Code runner** — a `CodeRunner` interface written against the Judge0 API
+  shape, so the backend is swappable between self-hosted
+  [CodeBox](https://github.com/hiteshchoudhary/Codebox) (MIT), Judge0 CE, or a
+  hosted Judge0. It needs Docker and cannot run on Vercel.
+- **Algorithm visualiser** — step-through animations recorded as frames, with
+  narration and a brute-force-vs-optimised comparison showing measured operation
+  counts.
+
 ## Design system
 
 One light theme across every screen, defined once in
