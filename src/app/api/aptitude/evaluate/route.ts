@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { SAMPLE_QUESTIONS } from '@/data/aptitudeData';
+import { requireApiUser } from '@/lib/session';
 
 interface UserSubmission {
   questionId: string;
@@ -8,6 +9,9 @@ interface UserSubmission {
 }
 
 export async function POST(request: Request) {
+  const user = await requireApiUser();
+  if (user instanceof Response) return user;
+
   try {
     const body = await request.json();
     const submissions: UserSubmission[] = body.submissions || [];
@@ -89,7 +93,7 @@ export async function POST(request: Request) {
         generatedRecommendations
       }
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ success: false, error: 'Invalid submission payload' }, { status: 400 });
   }
 }

@@ -1,208 +1,117 @@
 import Link from "next/link";
-import StreakHeatmap from "./StreakHeatmap";
-import "./DashboardMain.css";
+import { ArrowRight, Binary, Calculator, Sigma, Timer } from "lucide-react";
+import { Card, Container, EmptyState } from "@/components/ui";
+import { APTITUDE_TOPICS, COMPANY_PACKS, SAMPLE_QUESTIONS } from "@/data/aptitudeData";
 
 /**
  * The signed-in student, passed down from the server component that read the
- * session. This used to be hardcoded `useState` with a fake "Alex Vance", and
- * the component rendered its own NavDrawer and navbar on top of the ones in
- * AppShell — both are gone now.
+ * session.
+ *
+ * This screen used to hardcode "Alex Vance (CSE '26)", 250 AI credits and a
+ * 14-day streak, and advertised sixteen modules of which fourteen linked to
+ * /dsa. It now shows the real user and only the two modules that exist.
  */
 export interface DashboardUser {
   name: string;
-  credits: number;
 }
 
 export default function DashboardMain({ user }: { user: DashboardUser }) {
-  const modules = [
-    {
-      num: 1,
-      title: "AI Assistance & Analytics",
-      desc: "AI credit-based mentor analytics, instant code explanations, and personalized debugging guidance.",
-      icon: "🤖",
-      link: "/dsa",
-      badge: "Credit-Based",
-    },
-    {
-      num: 2,
-      title: "Leaderboard & Peer Ranks",
-      desc: "Global, college, and branch-wise rankings based on problem submissions and streak consistency.",
-      icon: "🏆",
-      link: "/dsa",
-      badge: "Live Ranks",
-    },
-    {
-      num: 3,
-      title: "Mock Interview (Faculty & AI)",
-      desc: "Interactive 1-on-1 AI voice mock interviews and faculty review sessions with instant feedback.",
-      icon: "🎙️",
-      link: "/dsa",
-      badge: "AI & Faculty",
-    },
-    {
-      num: 4,
-      title: "Company Requirement Portal",
-      desc: "Detailed CTC packages, skill prerequisites, eligibility criteria, and target tech stacks.",
-      icon: "🏢",
-      link: "/dsa",
-      badge: "Placements",
-    },
-    {
-      num: 5,
-      title: "Resume Maker & ATS Checker",
-      desc: "AI-powered resume builder, ATS compatibility scanner, and missing keyword suggestions.",
-      icon: "📄",
-      link: "/dsa",
-      badge: "AI Powered",
-    },
-    {
-      num: 6,
-      title: "Progress Heatmap",
-      desc: "GitHub-style contribution grid keeping track of daily coding practice and streak achievements.",
-      icon: "🟩",
-      link: "/dsa",
-      badge: "Daily Streak",
-    },
-    {
-      num: 7,
-      title: "Student Experiences Archive",
-      desc: "Interview & working experience stories shared by past & final-year placed students.",
-      icon: "💬",
-      link: "/dsa",
-      badge: "Verified Insights",
-    },
-    {
-      num: 8,
-      title: "JD Skill Gap Analyzer",
-      desc: "Upload job descriptions to analyze missing skills and get automated custom target roadmaps.",
-      icon: "🎯",
-      link: "/dsa",
-      badge: "Gap Analyzer",
-    },
-    {
-      num: 9,
-      title: "Company Status Tracker",
-      desc: "Track real-time hiring status for past, active, and upcoming campus recruitment drives.",
-      icon: "📅",
-      link: "/dsa",
-      badge: "Drive Pipeline",
-    },
-    {
-      num: 10,
-      title: "Notifications & Daily Streaks",
-      desc: "Personalized notifications, task reminders, and continuous daily streak motivators.",
-      icon: "🔥",
-      link: "/dsa",
-      badge: "Reminders",
-    },
-    {
-      num: 11,
-      title: "Aptitude & Reasoning Practice",
-      desc: "IndiaBix-style topic-wise quantitative, logical, and verbal practice quiz banks.",
-      icon: "📝",
-      link: "/dsa",
-      badge: "Quiz Banks",
-    },
-    {
-      num: 12,
-      title: "Virtual GD Practice",
-      desc: "AI-moderated virtual Group Discussion practice environment with communication feedback.",
-      icon: "🗣️",
-      link: "/dsa",
-      badge: "AI GD Simulator",
-    },
-    {
-      num: 13,
-      title: "Live Sessions (Mentor & HR)",
-      desc: "Schedule and join interactive sessions hosted by industry mentors, HRs, and seniors.",
-      icon: "👥",
-      link: "/dsa",
-      badge: "Live Calendar",
-    },
-    {
-      num: 14,
-      title: "Career Roadmap Generator",
-      desc: "Generate tailored step-by-step learning roadmaps for target tech roles and companies.",
-      icon: "🗺️",
-      link: "/dsa",
-      badge: "Step-by-Step",
-    },
-    {
-      num: 15,
-      title: "TPO Coordinator Portal",
-      desc: "Dedicated dashboard for Training & Placement Officers to manage drives & student lists.",
-      icon: "🎓",
-      link: "/dsa",
-      badge: "TPO Hub",
-    },
-    {
-      num: 16,
-      title: "Alumni Network & Job Board",
-      desc: "Connect directly with college alumni, request job referrals, and explore exclusive jobs.",
-      icon: "🌐",
-      link: "/dsa",
-      badge: "Alumni Jobs",
-    },
-  ];
+  // Derived from the real content, so these can never overstate what is there.
+  const topicCount = APTITUDE_TOPICS.length;
+  const questionCount = SAMPLE_QUESTIONS.length;
+  const packCount = COMPANY_PACKS.length;
+
+  // Only the first name — "Welcome back, Mohit" reads better than the full
+  // Google display name.
+  const firstName = user.name.split(" ")[0];
 
   return (
-    <div className="dashboard-root">
-      {/* Hero Welcome Banner */}
-      <section className="dash-hero-section">
-        <div className="dash-hero-card animate-fade-in">
-          <div>
-            <h1 className="hero-welcome-title">
-              Welcome back, <span>{user.name}</span> 👋
-            </h1>
-            <p className="hero-subtitle">
-              Your placement engine is active. Track daily streaks, practice DSA, and analyze skill gaps.
-            </p>
-            <div className="credit-badge" style={{ marginTop: 12, display: "inline-flex" }}>
-              🪙 {user.credits} AI Credits
-            </div>
-          </div>
+    <Container className="max-w-5xl">
+      <div className="border-b border-line pb-7">
+        <h1 className="text-2xl font-bold sm:text-3xl">
+          Welcome back, {firstName}
+        </h1>
+        <p className="mt-2 text-[15px] text-ink-muted">
+          Pick up where you left off, or start something new.
+        </p>
+      </div>
 
-          <Link href="/dsa" className="hero-action-btn">
-            ⚡ Open DSA Engineering Hub →
-          </Link>
+      <div className="mt-8 grid gap-5 sm:grid-cols-2">
+        <ModuleCard
+          href="/aptitude"
+          icon={<Calculator className="h-5 w-5" />}
+          title="Aptitude practice"
+          body={`${topicCount} topics across quantitative, logical reasoning and verbal, with ${questionCount} worked questions.`}
+        />
+        <ModuleCard
+          href="/aptitude/companies"
+          icon={<Timer className="h-5 w-5" />}
+          title="Company mock tests"
+          body={`${packCount} timed papers modelled on real campus tests, scored with +4 / −1 marking.`}
+        />
+        <ModuleCard
+          href="/dsa"
+          icon={<Binary className="h-5 w-5" />}
+          title="DSA problems"
+          body="Branch-wise curated sheets with LeetCode links, plus a live feed from the Codeforces API."
+        />
+        <ModuleCard
+          href="/aptitude/formulas"
+          icon={<Sigma className="h-5 w-5" />}
+          title="Formula sheets"
+          body="Quick-reference cards for the formulas that come up most often in campus aptitude rounds."
+        />
+      </div>
+
+      <section className="mt-12">
+        <h2 className="text-lg font-semibold">Your activity</h2>
+        <div className="mt-4">
+          {/*
+            Deliberately an empty state rather than a heatmap of invented
+            squares. Practice attempts are not stored yet — once the
+            ExamAttempt model exists this becomes a real chart.
+          */}
+          <EmptyState
+            title="No activity recorded yet"
+            description="Your practice history will appear here once you complete a topic or a mock test."
+            action={
+              <Link
+                href="/aptitude/practice"
+                className="text-sm font-semibold text-accent hover:underline"
+              >
+                Start practising →
+              </Link>
+            }
+          />
         </div>
       </section>
+    </Container>
+  );
+}
 
-      {/* Main Content Body */}
-      <main className="dash-main-container">
-        {/* Interactive Heatmap Widget */}
-        <StreakHeatmap />
-
-        {/* 16 Architecture Modules Grid */}
-        <div>
-          <div className="section-label" style={{ marginBottom: 16 }}>
-            <span>Core Architecture Modules</span> (All 16 Sections)
-          </div>
-
-          <div className="modules-grid">
-            {modules.map((m) => (
-              <Link href={m.link} key={m.num} style={{ textDecoration: "none" }}>
-                <div className="module-card">
-                  <div>
-                    <div className="module-card-header">
-                      <div className="module-icon-box">{m.icon}</div>
-                      <span className="module-num-badge">#{m.num} {m.badge}</span>
-                    </div>
-
-                    <h3 className="module-title">{m.title}</h3>
-                    <p className="module-desc">{m.desc}</p>
-                  </div>
-
-                  <div className="module-footer">
-                    <span>Explore Module</span>
-                    <span>→</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+function ModuleCard({
+  href,
+  icon,
+  title,
+  body,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  body: string;
+}) {
+  return (
+    <Link href={href} className="group block">
+      <Card interactive className="h-full p-6">
+        <div className="flex items-start justify-between gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+            {icon}
+          </span>
+          <ArrowRight className="h-4 w-4 shrink-0 text-ink-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-accent" />
         </div>
-      </main>
-    </div>
+        <h3 className="mt-4 text-base font-semibold">{title}</h3>
+        <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{body}</p>
+      </Card>
+    </Link>
   );
 }

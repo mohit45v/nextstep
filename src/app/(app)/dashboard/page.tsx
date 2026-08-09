@@ -9,12 +9,5 @@ export const metadata: Metadata = {
 export default async function DashboardPage() {
   const user = await requireUser();
 
-  return (
-    <DashboardMain
-      user={{
-        name: user.name ?? user.email ?? "Student",
-        credits: user.credits,
-      }}
-    />
-  );
+  return <DashboardMain user={{ name: user.name ?? user.email ?? "Student" }} />;
 }

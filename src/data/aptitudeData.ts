@@ -1,5 +1,7 @@
 export interface AptitudeQuestion {
   id: string;
+  /** References AptitudeTopic.id. */
+  topicId: string;
   category: 'Quantitative' | 'Logical Reasoning' | 'Verbal Ability';
   topic: string;
   question: string;
@@ -16,9 +18,6 @@ export interface AptitudeTopic {
   id: string;
   name: string;
   category: 'Quantitative' | 'Logical Reasoning' | 'Verbal Ability';
-  totalQuestions: number;
-  completedQuestions: number;
-  accuracy: number;
   iconName: string;
   description: string;
 }
@@ -29,7 +28,6 @@ export interface CompanyTestPack {
   logoColor: string;
   testTitle: string;
   durationMinutes: number;
-  totalQuestions: number;
   sections: { name: string; questionCount: number }[];
   cutoffPercentage: number;
   difficulty: 'Moderate' | 'Challenging' | 'High';
@@ -46,25 +44,11 @@ export interface FormulaCard {
   example: string;
 }
 
-export interface SmartRecommendation {
-  id: string;
-  title: string;
-  description: string;
-  category: 'Quantitative' | 'Logical Reasoning' | 'Verbal Ability';
-  topic: string;
-  impactScore: number; // e.g. +12% readiness
-  type: 'weakness_fix' | 'company_prep' | 'speed_booster';
-  recommendedQuestionIds: string[];
-}
-
 export const APTITUDE_TOPICS: AptitudeTopic[] = [
   {
     id: 'profit-loss',
     name: 'Profit & Loss',
     category: 'Quantitative',
-    totalQuestions: 25,
-    completedQuestions: 10,
-    accuracy: 40,
     iconName: 'TrendingUp',
     description: 'Cost Price, Selling Price, Marked Price, Discount, and Percentage Profit/Loss.'
   },
@@ -72,9 +56,6 @@ export const APTITUDE_TOPICS: AptitudeTopic[] = [
     id: 'time-work',
     name: 'Time & Work',
     category: 'Quantitative',
-    totalQuestions: 30,
-    completedQuestions: 22,
-    accuracy: 82,
     iconName: 'Clock',
     description: 'Work efficiency, Pipes & Cisterns, Alternate days work, and Men-Days rule.'
   },
@@ -82,9 +63,6 @@ export const APTITUDE_TOPICS: AptitudeTopic[] = [
     id: 'speed-distance',
     name: 'Speed, Distance & Time',
     category: 'Quantitative',
-    totalQuestions: 28,
-    completedQuestions: 15,
-    accuracy: 65,
     iconName: 'Zap',
     description: 'Average speed, Relative speed, Trains crossing platforms, and Boats & Streams.'
   },
@@ -92,9 +70,6 @@ export const APTITUDE_TOPICS: AptitudeTopic[] = [
     id: 'syllogisms',
     name: 'Syllogisms & Venn Diagrams',
     category: 'Logical Reasoning',
-    totalQuestions: 20,
-    completedQuestions: 18,
-    accuracy: 88,
     iconName: 'CheckCircle2',
     description: 'All, Some, No statements, Possibility cases, and Venn diagram logic.'
   },
@@ -102,9 +77,6 @@ export const APTITUDE_TOPICS: AptitudeTopic[] = [
     id: 'coding-decoding',
     name: 'Coding & Decoding',
     category: 'Logical Reasoning',
-    totalQuestions: 25,
-    completedQuestions: 20,
-    accuracy: 90,
     iconName: 'Code',
     description: 'Letter shift codes, Matrix coding, Substitutional coding, and Number patterns.'
   },
@@ -112,9 +84,6 @@ export const APTITUDE_TOPICS: AptitudeTopic[] = [
     id: 'blood-relations',
     name: 'Blood Relations',
     category: 'Logical Reasoning',
-    totalQuestions: 18,
-    completedQuestions: 8,
-    accuracy: 50,
     iconName: 'Users',
     description: 'Family tree diagrams, Coded relations, and Pointing-to-person statements.'
   },
@@ -122,9 +91,6 @@ export const APTITUDE_TOPICS: AptitudeTopic[] = [
     id: 'error-spotting',
     name: 'Error Spotting & Grammar',
     category: 'Verbal Ability',
-    totalQuestions: 35,
-    completedQuestions: 25,
-    accuracy: 76,
     iconName: 'FileText',
     description: 'Subject-verb agreement, Tenses, Prepositions, Modifiers, and Articles.'
   },
@@ -132,9 +98,6 @@ export const APTITUDE_TOPICS: AptitudeTopic[] = [
     id: 'reading-comprehension',
     name: 'Reading Comprehension',
     category: 'Verbal Ability',
-    totalQuestions: 15,
-    completedQuestions: 5,
-    accuracy: 60,
     iconName: 'BookOpen',
     description: 'Tone detection, Passage inference, Main idea, and Vocabulary in context.'
   }
@@ -143,6 +106,7 @@ export const APTITUDE_TOPICS: AptitudeTopic[] = [
 export const SAMPLE_QUESTIONS: AptitudeQuestion[] = [
   {
     id: 'q1',
+    topicId: 'profit-loss',
     category: 'Quantitative',
     topic: 'Profit & Loss',
     question: 'A trader buys an article for ₹800 and marks it up by 25%. If he offers a discount of 10% on the marked price, what is his net profit percentage?',
@@ -156,6 +120,7 @@ export const SAMPLE_QUESTIONS: AptitudeQuestion[] = [
   },
   {
     id: 'q2',
+    topicId: 'time-work',
     category: 'Quantitative',
     topic: 'Time & Work',
     question: 'A can complete a piece of work in 12 days and B can complete the same work in 18 days. If they work together for 4 days, what fraction of the work remains unfinished?',
@@ -169,6 +134,7 @@ export const SAMPLE_QUESTIONS: AptitudeQuestion[] = [
   },
   {
     id: 'q3',
+    topicId: 'speed-distance',
     category: 'Quantitative',
     topic: 'Speed, Distance & Time',
     question: 'A train 150 meters long passes a platform 250 meters long in 20 seconds. What is the speed of the train in km/h?',
@@ -182,6 +148,7 @@ export const SAMPLE_QUESTIONS: AptitudeQuestion[] = [
   },
   {
     id: 'q4',
+    topicId: 'syllogisms',
     category: 'Logical Reasoning',
     topic: 'Syllogisms',
     question: 'Statements: 1. All computers are machines. 2. Some machines are robots.\nConclusions: I. Some computers are robots. II. Some machines are computers.',
@@ -195,6 +162,7 @@ export const SAMPLE_QUESTIONS: AptitudeQuestion[] = [
   },
   {
     id: 'q5',
+    topicId: 'blood-relations',
     category: 'Logical Reasoning',
     topic: 'Blood Relations',
     question: 'Pointing to a photograph, Rohit said, "She is the daughter of my grandfather\'s only son." How is the girl in the photograph related to Rohit?',
@@ -208,6 +176,7 @@ export const SAMPLE_QUESTIONS: AptitudeQuestion[] = [
   },
   {
     id: 'q6',
+    topicId: 'error-spotting',
     category: 'Verbal Ability',
     topic: 'Error Spotting',
     question: 'Identify the part containing an error: "Neither the professor (A) / nor the students (B) / was present in the seminar hall (C) / No Error (D)"',
@@ -228,7 +197,6 @@ export const COMPANY_PACKS: CompanyTestPack[] = [
     logoColor: '#6C5CE7',
     testTitle: 'TCS National Qualifier Test 2026',
     durationMinutes: 45,
-    totalQuestions: 30,
     sections: [
       { name: 'Numerical Ability', questionCount: 12 },
       { name: 'Reasoning Ability', questionCount: 10 },
@@ -244,7 +212,6 @@ export const COMPANY_PACKS: CompanyTestPack[] = [
     logoColor: '#00A8FF',
     testTitle: 'Infosys Online Aptitude & Pseudo Code',
     durationMinutes: 40,
-    totalQuestions: 25,
     sections: [
       { name: 'Mathematical Reasoning', questionCount: 10 },
       { name: 'Logical Ability', questionCount: 10 },
@@ -260,7 +227,6 @@ export const COMPANY_PACKS: CompanyTestPack[] = [
     logoColor: '#A3CB38',
     testTitle: 'Accenture Cognitive & Assessment',
     durationMinutes: 50,
-    totalQuestions: 35,
     sections: [
       { name: 'Critical Reasoning', questionCount: 15 },
       { name: 'Abstract Reasoning', questionCount: 10 },
@@ -276,7 +242,6 @@ export const COMPANY_PACKS: CompanyTestPack[] = [
     logoColor: '#FF9F1A',
     testTitle: 'Amazon Online Technical & Reasoning',
     durationMinutes: 60,
-    totalQuestions: 30,
     sections: [
       { name: 'Advanced Quant & Logic', questionCount: 15 },
       { name: 'Work Style & Logic', questionCount: 15 }
@@ -326,35 +291,39 @@ export const FORMULA_CARDS: FormulaCard[] = [
   }
 ];
 
-export const SMART_RECOMMENDATIONS: SmartRecommendation[] = [
-  {
-    id: 'rec1',
-    title: 'Target Weak Area: Profit & Loss',
-    description: 'Your accuracy in Profit & Loss is currently 40%. Solving 8 targeted practice questions will boost your overall quantitative score.',
-    category: 'Quantitative',
-    topic: 'Profit & Loss',
-    impactScore: 14,
-    type: 'weakness_fix',
-    recommendedQuestionIds: ['q1']
-  },
-  {
-    id: 'rec2',
-    title: 'TCS NQT Speed Readiness',
-    description: 'Increase your speed in Time & Distance questions to meet the 1.5 min/question threshold for upcoming TCS campus drives.',
-    category: 'Quantitative',
-    topic: 'Speed, Distance & Time',
-    impactScore: 10,
-    type: 'company_prep',
-    recommendedQuestionIds: ['q3']
-  },
-  {
-    id: 'rec3',
-    title: 'Master Proximity Rule in Verbal',
-    description: 'Enhance your subject-verb agreement accuracy for Accenture & Infosys verbal assessments.',
-    category: 'Verbal Ability',
-    topic: 'Error Spotting',
-    impactScore: 8,
-    type: 'speed_booster',
-    recommendedQuestionIds: ['q6']
-  }
-];
+
+/* ---------------------------------------------------------------------------
+   Derived lookups.
+
+   Topics used to carry a hardcoded `totalQuestions` that summed to 196 while
+   the bank held 6 questions, plus `completedQuestions` / `accuracy` fields that
+   were invented rather than measured. Counts are now derived from the real
+   bank, so a topic can never advertise questions that do not exist.
+
+   Per-user progress (attempts, accuracy, streaks) deliberately lives nowhere in
+   this file — it belongs in the database once ExamAttempt exists.
+--------------------------------------------------------------------------- */
+
+/** Questions that actually exist for a topic. May legitimately be empty. */
+export function questionsForTopic(topicId: string): AptitudeQuestion[] {
+  return SAMPLE_QUESTIONS.filter((q) => q.topicId === topicId);
+}
+
+/** How many questions a topic really has. */
+export function questionCountForTopic(topicId: string): number {
+  return questionsForTopic(topicId).length;
+}
+
+/** Topics that have at least one question — the ones worth offering to practise. */
+export function topicsWithQuestions(): AptitudeTopic[] {
+  return APTITUDE_TOPICS.filter((t) => questionCountForTopic(t.id) > 0);
+}
+
+/**
+ * A company pack's question count is the sum of its sections, so it is derived
+ * rather than stored — a stored copy would silently drift out of sync the
+ * moment a section changed.
+ */
+export function packQuestionCount(pack: CompanyTestPack): number {
+  return pack.sections.reduce((sum, section) => sum + section.questionCount, 0);
+}

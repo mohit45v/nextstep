@@ -1,15 +1,11 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Timer, 
-  Bookmark, 
-  ArrowRight, 
-  AlertTriangle,
-  Send
-} from 'lucide-react';
-import { SAMPLE_QUESTIONS, CompanyTestPack, AptitudeQuestion } from "@/data/aptitudeData";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Bookmark, ChevronLeft, ChevronRight, Timer } from "lucide-react";
+import { SAMPLE_QUESTIONS, CompanyTestPack } from "@/data/aptitudeData";
 import type { ExamResults } from "@/types";
+import { cn } from "@/lib/cn";
+import { Badge, Button, Card, Container } from "@/components/ui";
 
 interface MockExamSimulatorProps {
   testPack?: CompanyTestPack | null;
@@ -20,26 +16,52 @@ interface MockExamSimulatorProps {
 export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
   testPack,
   onFinishExam,
-  onCancelExam
+  onCancelExam,
 }) => {
   const durationSeconds = (testPack?.durationMinutes || 20) * 60;
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(durationSeconds);
-  const [questions] = useState<AptitudeQuestion[]>(SAMPLE_QUESTIONS);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  
+
+  const [secondsRemaining, setSecondsRemaining] = useState(durationSeconds);
+  const [questions] = useState(SAMPLE_QUESTIONS);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [markedForReview, setMarkedForReview] = useState<Record<string, boolean>>({});
-  const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const currentQuestion = questions[currentIndex];
 
   /**
-   * Always points at the current render's `executeSubmission`, so the timer
-   * below can call it without listing it as a dependency.
+   * Real per-question timing.
    *
-   * This also fixes a real bug: the countdown used to call `handleAutoSubmit()`
-   * from inside a `setSecondsRemaining` updater with `[]` deps, so it captured
-   * the first render's closure. Running out of time submitted an empty answer
-   * sheet no matter what the student had filled in.
+   * The old code sent a hardcoded `timeSpentSeconds: 45` for every question,
+   * so the "average time per question" in the results was a constant dressed
+   * up as a measurement. We now accumulate the actual dwell time and bank it
+   * whenever the student moves to a different question.
    */
+  const timeSpent = useRef<Record<string, number>>({});
+  // Set on mount rather than in the initialiser — `Date.now()` during render is
+  // impure and would give a different answer on every re-render.
+  const questionShownAt = useRef<number>(0);
+
+  useEffect(() => {
+    questionShownAt.current = Date.now();
+  }, []);
+
+  function bankTimeForCurrentQuestion() {
+    if (questionShownAt.current === 0) return;
+    const elapsed = Math.round((Date.now() - questionShownAt.current) / 1000);
+    const id = currentQuestion.id;
+    timeSpent.current[id] = (timeSpent.current[id] ?? 0) + elapsed;
+    questionShownAt.current = Date.now();
+  }
+
+  function goToQuestion(nextIndex: number) {
+    if (nextIndex < 0 || nextIndex >= questions.length) return;
+    bankTimeForCurrentQuestion();
+    setCurrentIndex(nextIndex);
+  }
+
   const executeSubmissionRef = useRef<() => void>(undefined);
   const hasAutoSubmitted = useRef(false);
 
@@ -60,302 +82,329 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
     }
   }, [secondsRemaining]);
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const currentQuestion = questions[currentIndex];
-
-  const handleSelectOption = (optionIndex: number) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [currentQuestion.id]: optionIndex
-    }));
-  };
-
-  const handleToggleMarkReview = () => {
-    setMarkedForReview((prev) => ({
-      ...prev,
-      [currentQuestion.id]: !prev[currentQuestion.id]
-    }));
-  };
-
   const executeSubmission = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    bankTimeForCurrentQuestion();
+
     const submissions = questions.map((q) => ({
       questionId: q.id,
-      selectedOption: answers[q.id] !== undefined ? answers[q.id] : -1,
-      timeSpentSeconds: 45
+      selectedOption: answers[q.id] ?? -1,
+      timeSpentSeconds: timeSpent.current[q.id] ?? 0,
     }));
 
     try {
-      const res = await fetch('/api/aptitude/evaluate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/aptitude/evaluate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          testPackId: testPack?.id || 'mock-exam-1',
-          submissions
-        })
+          testPackId: testPack?.id || "mock-exam-1",
+          submissions,
+        }),
       });
+
       const data = await res.json();
-      if (data.success) {
-        onFinishExam(data.data);
-      } else {
-        onFinishExam({
-          testPackId: testPack?.id || 'mock-exam-1',
-          totalScore: 16,
-          maxScore: 24,
-          correctCount: 4,
-          incorrectCount: 1,
-          skippedCount: 1,
-          accuracyPercentage: 80,
-          totalTimeSeconds: durationSeconds - secondsRemaining,
-          averageTimePerQuestion: 45,
-          detailedResults: questions.map(q => ({
-            questionId: q.id,
-            questionText: q.question,
-            options: q.options,
-            userOption: answers[q.id] !== undefined ? answers[q.id] : -1,
-            correctOption: q.correctOption,
-            isCorrect: answers[q.id] === q.correctOption,
-            isSkipped: answers[q.id] === undefined || answers[q.id] === -1,
-            explanation: q.explanation,
-            shortcutTip: q.shortcutTip,
-            topic: q.topic,
-            category: q.category
-          }))
-        });
+
+      if (!res.ok || !data.success) {
+        // Previously this branch invented a result — 80% accuracy, 4 correct,
+        // regardless of what the student actually answered. Showing a real
+        // error is the only honest option: scoring happens on the server, so
+        // if the server did not answer, there is no score.
+        setSubmitError(
+          data?.error ?? "Couldn't score your test. Check your connection and try again.",
+        );
+        setIsSubmitting(false);
+        hasAutoSubmitted.current = false;
+        return;
       }
+
+      onFinishExam(data.data);
     } catch {
-      onCancelExam();
+      setSubmitError(
+        "Couldn't reach the server to score your test. Your answers are still here — try submitting again.",
+      );
+      setIsSubmitting(false);
+      hasAutoSubmitted.current = false;
     }
   };
 
-  // Refresh the ref after every render so the timer above always calls the
-  // current closure, with the answers the student has actually entered.
+  // Refresh the ref after every render so the timer always calls the current
+  // closure, with the answers the student has actually entered.
   useEffect(() => {
     executeSubmissionRef.current = executeSubmission;
   });
 
   const answeredCount = Object.keys(answers).length;
   const reviewCount = Object.values(markedForReview).filter(Boolean).length;
-  const unattemptedCount = questions.length - answeredCount;
+  const isLowTime = secondsRemaining <= 60;
+
+  const formattedTime = useMemo(() => {
+    const m = Math.floor(secondsRemaining / 60);
+    const s = secondsRemaining % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }, [secondsRemaining]);
 
   return (
-    <div className="fixed inset-0 bg-[#0B0F17] z-50 flex flex-col overflow-hidden text-white">
-      
-      {/* Top Header */}
-      <header className="bg-[#131927] border-b border-[#262F40] text-white px-6 py-4 flex items-center justify-between shadow-lg">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-lg purple-gradient-bg flex items-center justify-center font-bold text-sm">
-            N
-          </div>
-          <div>
-            <h2 className="text-base font-bold">{testPack?.testTitle || 'Full Aptitude Mock Assessment'}</h2>
-            <p className="text-xs text-[#A29BFE]">Strict Examination Mode</p>
-          </div>
+    <Container>
+      {/* Exam bar */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-5">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-bold">
+            {testPack ? `${testPack.companyName} — ${testPack.testTitle}` : "Mock test"}
+          </h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            {answeredCount} of {questions.length} answered
+            {reviewCount > 0 && ` · ${reviewCount} marked for review`}
+          </p>
         </div>
 
-        {/* Live Timer */}
-        <div className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-extrabold font-mono ${
-          secondsRemaining < 300 ? 'bg-rose-600 text-white animate-pulse' : 'bg-[#1C2333] text-[#A29BFE] border border-[#262F40]'
-        }`}>
-          <Timer className="w-4 h-4" />
-          <span>{formatTime(secondsRemaining)}</span>
-        </div>
-
-        {/* Exit & Submit controls */}
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => setShowSubmitModal(true)}
-            className="purple-gradient-bg hover:opacity-95 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-md shadow-purple-900/50"
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              "flex items-center gap-2 rounded-full border px-4 py-2 font-mono text-sm font-bold tabular-nums",
+              isLowTime
+                ? "border-danger-line bg-danger-soft text-danger"
+                : "border-line bg-surface text-ink",
+            )}
+            role="timer"
+            aria-live={isLowTime ? "assertive" : "off"}
           >
-            <Send className="w-3.5 h-3.5" />
-            <span>Submit Test</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Workspace */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-y-auto">
-        
-        {/* Left Question Box */}
-        <div className="lg:col-span-8 space-y-6 flex flex-col justify-between bg-[#131927] p-6 rounded-2xl border border-[#262F40] shadow-md">
-          
-          <div className="space-y-6">
-            {/* Top Bar */}
-            <div className="flex items-center justify-between pb-4 border-b border-[#262F40]">
-              <span className="text-xs font-bold text-[#A29BFE] bg-[#6C5CE7]/20 px-3 py-1 rounded-md border border-[#6C5CE7]/30">
-                Question {currentIndex + 1} of {questions.length}
-              </span>
-
-              <button
-                onClick={handleToggleMarkReview}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                  markedForReview[currentQuestion.id]
-                    ? 'bg-amber-950/60 border-amber-800/40 text-amber-300'
-                    : 'bg-[#1C2333] border-[#262F40] text-slate-300 hover:bg-[#262F40]'
-                }`}
-              >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span>{markedForReview[currentQuestion.id] ? 'Marked for Review' : 'Mark for Review'}</span>
-              </button>
-            </div>
-
-            {/* Question Text */}
-            <div className="space-y-3">
-              <h3 className="text-base sm:text-lg font-bold text-white leading-relaxed">
-                {currentQuestion.question}
-              </h3>
-            </div>
-
-            {/* Options */}
-            <div className="space-y-3">
-              {currentQuestion.options.map((opt, idx) => {
-                const isSelected = answers[currentQuestion.id] === idx;
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => handleSelectOption(idx)}
-                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${
-                      isSelected
-                        ? 'bg-[#1C1936] border-[#6C5CE7] text-[#A29BFE] font-bold shadow-lg shadow-purple-950/50'
-                        : 'bg-[#1C2333] border-[#262F40] hover:border-[#6C5CE7]/60 text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center border ${
-                        isSelected ? 'bg-[#6C5CE7] text-white border-[#6C5CE7]' : 'bg-[#131927] text-slate-400 border-[#262F40]'
-                      }`}>
-                        {String.fromCharCode(65 + idx)}
-                      </div>
-                      <span className="text-sm">{opt}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <Timer className="h-4 w-4" />
+            {formattedTime}
           </div>
-
-          {/* Navigation Controls */}
-          <div className="flex items-center justify-between pt-6 border-t border-[#262F40]">
-            <button
-              onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
-              disabled={currentIndex === 0}
-              className="px-4 py-2 rounded-xl text-xs font-semibold border border-[#262F40] text-slate-300 hover:bg-[#1C2333] disabled:opacity-40"
-            >
-              ← Previous
-            </button>
-
-            <button
-              onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))}
-              disabled={currentIndex === questions.length - 1}
-              className="bg-[#6C5CE7] hover:bg-[#8257E5] text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md shadow-purple-900/40 flex items-center space-x-1"
-            >
-              <span>Next Question</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-
+          <Button variant="secondary" onClick={() => setShowSubmitModal(true)}>
+            Submit
+          </Button>
         </div>
-
-        {/* Right Palette & Status Grid */}
-        <div className="lg:col-span-4 space-y-6">
-          
-          <div className="bg-[#131927] p-5 rounded-2xl border border-[#262F40] shadow-md space-y-4">
-            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Question Palette Overview</h4>
-            
-            <div className="grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="p-2 rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-800/40">
-                <span className="font-extrabold text-sm block">{answeredCount}</span>
-                <span className="text-[10px]">Answered</span>
-              </div>
-              <div className="p-2 rounded-lg bg-amber-950/60 text-amber-300 border border-amber-800/40">
-                <span className="font-extrabold text-sm block">{reviewCount}</span>
-                <span className="text-[10px]">Marked</span>
-              </div>
-              <div className="p-2 rounded-lg bg-[#1C2333] text-slate-400 border border-[#262F40]">
-                <span className="font-extrabold text-sm block">{unattemptedCount}</span>
-                <span className="text-[10px]">Unattempted</span>
-              </div>
-            </div>
-
-            {/* Grid Palette */}
-            <div className="grid grid-cols-5 gap-2 pt-2">
-              {questions.map((q, idx) => {
-                const isAnswered = answers[q.id] !== undefined;
-                const isMarked = markedForReview[q.id];
-                const isCurrent = idx === currentIndex;
-
-                let btnStyle = "bg-[#1C2333] text-slate-400 border-[#262F40]";
-                if (isAnswered) btnStyle = "bg-emerald-600 text-white font-bold border-emerald-500";
-                if (isMarked) btnStyle = "bg-amber-600 text-white font-bold border-amber-500";
-                if (isCurrent) btnStyle += " ring-2 ring-[#6C5CE7] ring-offset-2 ring-offset-[#131927]";
-
-                return (
-                  <button
-                    key={q.id}
-                    onClick={() => setCurrentIndex(idx)}
-                    className={`h-10 rounded-lg text-xs font-bold transition-all border ${btnStyle}`}
-                  >
-                    {idx + 1}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-        </div>
-
       </div>
 
-      {/* Confirmation Modal */}
-      {showSubmitModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#131927] border border-[#262F40] rounded-2xl p-6 max-w-md w-full space-y-4 shadow-2xl animate-in zoom-in-95">
-            <div className="flex items-center space-x-3 text-[#A29BFE]">
-              <AlertTriangle className="w-6 h-6 text-amber-400" />
-              <h3 className="text-lg font-bold text-white">Confirm Test Submission</h3>
-            </div>
-            
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Are you sure you want to finish and submit your exam? You have answered <strong>{answeredCount}</strong> of <strong>{questions.length}</strong> questions.
-            </p>
-
-            <div className="bg-[#1C2333] p-3 rounded-xl border border-[#262F40] text-xs space-y-1">
-              <div className="flex justify-between text-slate-300">
-                <span>Answered Questions:</span>
-                <strong className="text-emerald-400">{answeredCount}</strong>
-              </div>
-              <div className="flex justify-between text-slate-300">
-                <span>Unattempted Questions:</span>
-                <strong className="text-rose-400">{unattemptedCount}</strong>
-              </div>
-              <div className="flex justify-between text-slate-300">
-                <span>Marked for Review:</span>
-                <strong className="text-amber-400">{reviewCount}</strong>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-3 pt-2">
-              <button
-                onClick={() => setShowSubmitModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-[#262F40] text-slate-300 font-semibold text-xs hover:bg-[#1C2333]"
-              >
-                Continue Test
-              </button>
-              <button
-                onClick={executeSubmission}
-                className="flex-1 py-2.5 rounded-xl purple-gradient-bg text-white font-bold text-xs shadow-md shadow-purple-900/50"
-              >
-                Submit Exam
-              </button>
-            </div>
+      {submitError && (
+        <div
+          role="alert"
+          className="mt-5 flex gap-3 rounded-card border border-danger-line bg-danger-soft px-4 py-3.5"
+        >
+          <AlertTriangle className="h-[18px] w-[18px] shrink-0 text-danger" />
+          <div>
+            <p className="text-sm font-semibold text-danger">Not submitted</p>
+            <p className="mt-1 text-sm leading-relaxed text-ink-muted">{submitError}</p>
           </div>
         </div>
       )}
 
-    </div>
+      <div className="mt-7 grid gap-6 lg:grid-cols-[1fr_15rem]">
+        {/* Question */}
+        <Card className="p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+            <span className="text-sm font-semibold text-ink">
+              Question {currentIndex + 1}
+              <span className="font-normal text-ink-subtle"> of {questions.length}</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <Badge tone="neutral">{currentQuestion.topic}</Badge>
+              <button
+                type="button"
+                onClick={() =>
+                  setMarkedForReview((prev) => ({
+                    ...prev,
+                    [currentQuestion.id]: !prev[currentQuestion.id],
+                  }))
+                }
+                className={cn(
+                  "inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  markedForReview[currentQuestion.id]
+                    ? "border-warn-line bg-warn-soft text-warn"
+                    : "border-line bg-surface text-ink-muted hover:text-ink",
+                )}
+              >
+                <Bookmark className="h-3.5 w-3.5" />
+                {markedForReview[currentQuestion.id] ? "Marked" : "Mark for review"}
+              </button>
+            </div>
+          </div>
+
+          <p className="mt-5 text-[17px] leading-relaxed font-medium text-ink">
+            {currentQuestion.question}
+          </p>
+
+          <div className="mt-5 space-y-2.5">
+            {currentQuestion.options.map((option, i) => {
+              const isPicked = answers[currentQuestion.id] === i;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() =>
+                    setAnswers((prev) => ({ ...prev, [currentQuestion.id]: i }))
+                  }
+                  className={cn(
+                    "flex w-full cursor-pointer items-center gap-3 rounded-input border px-4 py-3 text-left transition-colors",
+                    isPicked
+                      ? "border-accent bg-accent-soft"
+                      : "border-line bg-surface hover:border-line-strong",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold",
+                      isPicked ? "bg-accent text-white" : "bg-inset text-ink-subtle",
+                    )}
+                  >
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <span className="text-[15px] text-ink">{option}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 flex items-center justify-between border-t border-line pt-5">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={currentIndex === 0}
+              onClick={() => goToQuestion(currentIndex - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+
+            {answers[currentQuestion.id] !== undefined && (
+              <button
+                type="button"
+                onClick={() =>
+                  setAnswers((prev) => {
+                    const next = { ...prev };
+                    delete next[currentQuestion.id];
+                    return next;
+                  })
+                }
+                className="cursor-pointer text-sm font-medium text-ink-subtle hover:text-ink"
+              >
+                Clear answer
+              </button>
+            )}
+
+            <Button
+              size="sm"
+              disabled={currentIndex >= questions.length - 1}
+              onClick={() => goToQuestion(currentIndex + 1)}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </Card>
+
+        {/* Question palette */}
+        <aside>
+          <Card className="p-4">
+            <p className="text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
+              Questions
+            </p>
+            <div className="mt-3 grid grid-cols-5 gap-2">
+              {questions.map((q, i) => {
+                const answered = answers[q.id] !== undefined;
+                const marked = markedForReview[q.id];
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => goToQuestion(i)}
+                    aria-label={`Question ${i + 1}${answered ? ", answered" : ""}`}
+                    aria-current={i === currentIndex ? "true" : undefined}
+                    className={cn(
+                      "grid h-9 cursor-pointer place-items-center rounded-lg border text-sm font-semibold transition-colors",
+                      i === currentIndex && "ring-2 ring-accent ring-offset-1",
+                      marked
+                        ? "border-warn-line bg-warn-soft text-warn"
+                        : answered
+                          ? "border-success-line bg-success-soft text-success"
+                          : "border-line bg-surface text-ink-subtle hover:border-line-strong",
+                    )}
+                  >
+                    {i + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            <dl className="mt-4 space-y-1.5 border-t border-line pt-3.5 text-xs">
+              <LegendRow className="bg-success-soft border-success-line" label="Answered" value={answeredCount} />
+              <LegendRow className="bg-warn-soft border-warn-line" label="Marked" value={reviewCount} />
+              <LegendRow className="bg-surface border-line" label="Not answered" value={questions.length - answeredCount} />
+            </dl>
+          </Card>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-3 w-full"
+            onClick={onCancelExam}
+          >
+            Leave test
+          </Button>
+        </aside>
+      </div>
+
+      {/* Submit confirmation */}
+      {showSubmitModal && (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-ink/40 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="submit-title"
+        >
+          <Card className="w-full max-w-md p-6">
+            <h2 id="submit-title" className="text-lg font-bold">
+              Submit your test?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+              You&rsquo;ve answered {answeredCount} of {questions.length} questions.
+              {questions.length - answeredCount > 0 &&
+                ` ${questions.length - answeredCount} will be marked as skipped.`}
+            </p>
+
+            <div className="mt-5 flex gap-3">
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => setShowSubmitModal(false)}
+              >
+                Keep working
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setShowSubmitModal(false);
+                  void executeSubmission();
+                }}
+              >
+                {isSubmitting ? "Scoring…" : "Submit"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </Container>
   );
 };
+
+function LegendRow({
+  className,
+  label,
+  value,
+}: {
+  className: string;
+  label: string;
+  value: number;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={cn("h-3 w-3 shrink-0 rounded border", className)} />
+      <dt className="flex-1 text-ink-muted">{label}</dt>
+      <dd className="font-semibold text-ink tabular-nums">{value}</dd>
+    </div>
+  );
+}

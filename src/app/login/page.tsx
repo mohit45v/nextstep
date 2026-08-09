@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { signIn } from "@/lib/auth";
 import { ALLOWED_EMAIL_DOMAIN, DEFAULT_LOGIN_REDIRECT } from "@/lib/constants";
+import { Logo } from "@/components/ui/Logo";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -38,48 +41,50 @@ export default async function LoginPage({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0B0F17] px-4 py-12 text-[#F8FAFC]">
-      <div className="w-full max-w-md">
-        <div className="rounded-2xl border border-[#262F40] bg-[#131927] p-8 shadow-2xl">
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-[#2563EB] text-2xl font-bold text-white">
-              N
-            </div>
-            <h1 className="text-2xl font-bold">
-              NextStep <span className="text-[#60A5FA]">Portal</span>
-            </h1>
-            <p className="mt-2 text-sm text-slate-400">
-              Placement &amp; Skill Acceleration Platform
-            </p>
-          </div>
+    <main className="flex min-h-screen flex-col items-center justify-center px-4 py-12">
+      <div className="w-full max-w-[26rem]">
+        <Link
+          href="/"
+          className="mb-8 inline-flex items-center gap-1.5 text-sm font-medium text-ink-subtle transition-colors hover:text-ink"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Link>
+
+        <div className="rounded-card border border-line bg-surface p-8">
+          <Logo />
+
+          <h1 className="mt-6 text-2xl font-bold">Sign in</h1>
+          <p className="mt-2 text-[15px] text-ink-muted">
+            Use the Google account your college issued you.
+          </p>
 
           {message && (
             <div
               role="alert"
-              className="mb-6 rounded-lg border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-300"
+              className="mt-6 rounded-input border border-danger-line bg-danger-soft px-4 py-3 text-sm leading-relaxed text-danger"
             >
               {message}
             </div>
           )}
 
-          <form action={signInWithGoogle}>
+          <form action={signInWithGoogle} className="mt-7">
             <button
               type="submit"
-              className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg bg-white px-4 py-3 font-semibold text-slate-800 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#60A5FA] focus-visible:ring-offset-2 focus-visible:ring-offset-[#131927]"
+              className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-line bg-surface px-4 py-3 text-[15px] font-semibold text-ink transition-colors hover:border-line-strong hover:bg-inset"
             >
               <GoogleMark />
-              Continue with Terna Google
+              Continue with Google
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs leading-relaxed text-slate-500">
-            Only <span className="font-mono text-slate-400">@{ALLOWED_EMAIL_DOMAIN}</span>{" "}
-            accounts can sign in. Use the Google account your college issued you
-            — no separate password needed.
+          <p className="mt-6 border-t border-line pt-5 text-sm leading-relaxed text-ink-subtle">
+            Only <span className="font-medium text-ink-muted">@{ALLOWED_EMAIL_DOMAIN}</span>{" "}
+            accounts can sign in. Personal Gmail accounts will be turned away.
           </p>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-600">
+        <p className="mt-6 text-center text-sm text-ink-subtle">
           Trouble signing in? Contact your TPO coordinator.
         </p>
       </div>

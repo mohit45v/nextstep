@@ -1,64 +1,112 @@
 @import "tailwindcss";
 
-@layer base {
-  :root {
-    --primary: #2563EB;
-    --primary-hover: #3B82F6;
-    --primary-light: rgba(37, 99, 235, 0.15);
-    --primary-border: #1E3A8A;
-    --bg-main: #0B0F17;
-    --surface-card: #131927;
-    --surface-inset: #1E293B;
-    --border-color: #262F40;
-    --text-main: #F8FAFC;
-    --text-muted: #94A3B8;
-  }
+/* ---------------------------------------------------------------------------
+   Design tokens.
+
+   One light system for the whole app. Every colour used anywhere should come
+   from this list — if a screen needs a hex literal, the palette is missing
+   something and should be extended here rather than worked around locally.
+
+   Tailwind v4 turns each `--color-x` into utilities (`bg-x`, `text-x`,
+   `border-x`), so there is no separate config file to keep in sync.
+--------------------------------------------------------------------------- */
+@theme {
+  /* Surfaces */
+  --color-canvas: #f2f2f2; /* page background — soft grey, not white */
+  --color-surface: #ffffff; /* cards, panels */
+  --color-inset: #f7f7f7; /* wells inside a card */
+
+  /* Text */
+  --color-ink: #111111; /* headings, primary text */
+  --color-ink-muted: #5c5c5c; /* body copy */
+  --color-ink-subtle: #8a8a8a; /* captions, metadata */
+
+  /* Lines */
+  --color-line: #e5e5e5;
+  --color-line-strong: #d4d4d4;
+
+  /* Brand */
+  --color-accent: #ff6500;
+  --color-accent-hover: #e65a00;
+  --color-accent-soft: #fff2e8;
+  --color-accent-line: #ffd4b8;
+
+  /* Status — used for correct/incorrect answers and difficulty chips */
+  --color-success: #15803d;
+  --color-success-soft: #f0fdf4;
+  --color-success-line: #bbf7d0;
+
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fef2f2;
+  --color-danger-line: #fecaca;
+
+  --color-warn: #a16207;
+  --color-warn-soft: #fefce8;
+  --color-warn-line: #fef08a;
+
+  --color-info: #1d4ed8;
+  --color-info-soft: #eff6ff;
+  --color-info-line: #bfdbfe;
+
+  /* Radii — buttons are pills, containers are soft rectangles */
+  --radius-card: 0.875rem;
+  --radius-input: 0.625rem;
+
+  /* Fira Sans, matching the reference. Loaded by next/font in layout.tsx. */
+  --font-sans: var(--font-fira-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  background-color: var(--color-canvas);
 }
 
 body {
-  background-color: #0B0F17;
-  color: #F8FAFC;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* Glassmorphism & Custom Dark Soft Card Utilities */
-.soft-card {
-  background: #131927;
-  border: 1px solid #262F40;
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), 0 2px 6px -1px rgba(37, 99, 235, 0.08);
-  border-radius: 1rem;
+/* Headings run tight and dark; body copy is muted. Set once so screens don't
+   each re-specify tracking and weight. */
+h1,
+h2,
+h3 {
+  color: var(--color-ink);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
-.soft-card-hover {
-  transition: all 0.2s ease-in-out;
+/* A visible focus ring everywhere, since the accent colour alone is not an
+   accessible focus indicator. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
-.soft-card-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
-  border-color: #2563EB;
-}
-
-.blue-gradient-bg {
-  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
-}
-
-.blue-dark-gradient {
-  background: linear-gradient(135deg, #1E293B 0%, #131927 100%);
-}
-
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #0B0F17;
+  background: var(--color-canvas);
 }
 ::-webkit-scrollbar-thumb {
-  background: #262F40;
+  background: var(--color-line-strong);
   border-radius: 9999px;
+  border: 2px solid var(--color-canvas);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2563EB;
+  background: var(--color-ink-subtle);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

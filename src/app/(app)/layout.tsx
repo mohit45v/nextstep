@@ -1,10 +1,10 @@
 import { requireUser } from "@/lib/session";
 import { AppShell } from "@/components/layout/AppShell";
-import { SignOutButton } from "@/components/auth/SignOutButton";
+import { AccountMenu } from "@/components/auth/AccountMenu";
 
 /**
  * Layout for every signed-in route. `requireUser()` is the server-side gate —
- * middleware already redirects anonymous visitors, but this makes the guarantee
+ * proxy.ts already redirects anonymous visitors, but this makes the guarantee
  * hold even if the matcher is ever misconfigured.
  */
 export default async function AppLayout({
@@ -17,15 +17,10 @@ export default async function AppLayout({
   return (
     <AppShell
       accountSlot={
-        <div className="flex items-center gap-3">
-          <span
-            className="hidden text-xs text-slate-400 md:inline"
-            title={user.email ?? undefined}
-          >
-            {user.name ?? user.email}
-          </span>
-          <SignOutButton />
-        </div>
+        <AccountMenu
+          name={user.name ?? user.email ?? "Student"}
+          email={user.email ?? null}
+        />
       }
     >
       {children}

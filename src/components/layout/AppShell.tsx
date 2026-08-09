@@ -16,39 +16,30 @@ import { AptitudeSessionProvider } from "@/components/aptitude/AptitudeSessionPr
 export function AppShell({
   children,
   accountSlot,
-  readinessScore,
-  streakDays,
 }: {
   children: React.ReactNode;
   accountSlot?: React.ReactNode;
-  readinessScore?: number;
-  streakDays?: number;
 }) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   return (
     <AptitudeSessionProvider>
-      <div className="min-h-screen bg-[#0B0F17] text-[#F8FAFC] flex flex-col font-sans">
-        <NavDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
+      <NavDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
 
+      {/* Drawer is fixed at 18rem and always visible from `lg` up. */}
+      <div className="flex min-h-screen flex-col lg:pl-72">
         <Navbar
           onToggleDrawer={() => setIsDrawerOpen((open) => !open)}
-          readinessScore={readinessScore}
-          streakDays={streakDays}
           accountSlot={accountSlot}
         />
 
-        <main className="flex-1 w-full mx-auto lg:pl-72">{children}</main>
+        <main className="flex-1 px-4 py-8 sm:px-6">{children}</main>
 
-        <footer className="bg-[#131927] border-t border-[#262F40] py-6 mt-12 text-center text-xs text-slate-400 lg:pl-72">
-          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-white">NextStep Engine</span>
-              <span>•</span>
-              <span>AI Placement &amp; Career Development Platform</span>
-            </div>
-            <p>© {new Date().getFullYear()} NextStep · Terna Engineering College</p>
-          </div>
+        <footer className="border-t border-line px-4 py-6 sm:px-6">
+          <p className="text-xs text-ink-subtle">
+            NextStep · A student project for Terna Engineering College. Not an
+            official college service.
+          </p>
         </footer>
       </div>
     </AptitudeSessionProvider>

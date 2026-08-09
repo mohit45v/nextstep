@@ -1,9 +1,17 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import Link from "next/link";
-import NavDrawer from "@/components/layout/NavDrawer";
-import "./DSAPage.css";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, RefreshCw, Search } from "lucide-react";
+import { cn } from "@/lib/cn";
+import {
+  Badge,
+  Button,
+  Card,
+  Container,
+  DifficultyBadge,
+  EmptyState,
+  PageHeader,
+} from "@/components/ui";
 
 export interface DSATopic {
   id: string;
@@ -12,7 +20,6 @@ export interface DSATopic {
   description: string;
   branch: "General" | "CS & IT" | "AIDS" | "Electrical" | "Mechanical" | "Civil";
   totalProblems: number;
-  solvedProblems: number;
 }
 
 export interface DSAProblem {
@@ -37,28 +44,38 @@ const BRANCH_OPTIONS = [
 
 const CODEFORCES_TAGS = [
   { tag: "dp", label: "Dynamic Programming" },
-  { tag: "graphs", label: "Graph Algorithms" },
-  { tag: "trees", label: "Trees & Data Structures" },
-  { tag: "math", label: "Matrix & Math Algorithms" },
-  { tag: "greedy", label: "Greedy Algorithms" },
+  { tag: "graphs", label: "Graphs" },
+  { tag: "trees", label: "Trees" },
+  { tag: "math", label: "Math" },
+  { tag: "greedy", label: "Greedy" },
   { tag: "shortest paths", label: "Shortest Paths" },
 ];
 
+type Status = "idle" | "loading" | "ready" | "error";
+
 export default function DSAPage() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [mode, setMode] = useState<"curated" | "live">("curated");
   const [selectedBranch, setSelectedBranch] = useState("All Branches");
 
   const [topics, setTopics] = useState<DSATopic[]>([]);
-  const [topicsStatus, setTopicsStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [topicsStatus, setTopicsStatus] = useState<Status>("loading");
   const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 
   const [problems, setProblems] = useState<DSAProblem[]>([]);
-  const [problemsStatus, setProblemsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [problemsStatus, setProblemsStatus] = useState<Status>("idle");
 
   const [activeLiveTag, setActiveLiveTag] = useState("dp");
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<"all" | "unsolved" | "solved">("all");
+
+  /**
+   * Locally-ticked problems.
+   *
+   * The API route this used to PATCH returned `{ solved: true }` without
+   * writing anything, so progress looked saved and silently vanished on
+   * refresh. That route is gone. Ticking still works for the current session,
+   * and the notice below says plainly that it is not persisted yet.
+   */
+  const [solvedLocally, setSolvedLocally] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (mode !== "curated") return;
@@ -86,11 +103,9 @@ export default function DSAPage() {
   }, [topics, selectedBranch]);
 
   /**
-   * Derived rather than stored. The old code kept `activeTopicId` in state and
-   * corrected it from an effect whenever the branch filter changed, which cost
-   * an extra render pass and briefly rendered a topic that wasn't in the list.
-   * Falling back to the first visible topic here means there is never an
-   * inconsistent frame.
+   * Derived rather than stored. The old code kept this in state and corrected
+   * it from an effect whenever the branch filter changed, costing an extra
+   * render and briefly showing a topic that was not in the filtered list.
    */
   const activeTopicId = useMemo(() => {
     if (selectedTopicId && filteredTopics.some((t) => t.id === selectedTopicId)) {
@@ -128,116 +143,61 @@ export default function DSAPage() {
     return () => controller.abort();
   }, [mode, activeTopicId, activeLiveTag]);
 
-  const activeTopic = useMemo(
-    () => topics.find((t) => t.id === activeTopicId) || null,
-    [topics, activeTopicId]
-  );
+  const activeTopic = topics.find((t) => t.id === activeTopicId) ?? null;
 
   const visibleProblems = useMemo(() => {
-    return problems.filter((p) => {
-      if (filterStatus === "solved" && !p.solved) return false;
-      if (filterStatus === "unsolved" && p.solved) return false;
-      if (search.trim() && !p.title.toLowerCase().includes(search.trim().toLowerCase())) {
-        return false;
-      }
-      return true;
-    });
-  }, [problems, filterStatus, search]);
+    const term = search.trim().toLowerCase();
+    if (!term) return problems;
+    return problems.filter((p) => p.title.toLowerCase().includes(term));
+  }, [problems, search]);
 
-  const toggleSolved = (problem: DSAProblem) => {
-    const nextSolved = !problem.solved;
-
-    setProblems((prev) =>
-      prev.map((p) => (p.id === problem.id ? { ...p, solved: nextSolved } : p))
-    );
-
-    if (mode === "curated" && activeTopicId) {
-      setTopics((prev) =>
-        prev.map((t) =>
-          t.id === activeTopicId
-            ? { ...t, solvedProblems: Math.max(0, (t.solvedProblems || 0) + (nextSolved ? 1 : -1)) }
-            : t
-        )
-      );
-
-      fetch(`/api/dsa/problems/${problem.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ solved: nextSolved }),
-      }).catch(() => {});
-    }
-  };
-
-  const handleBranchSelectFromDrawer = (branch: string) => {
-    setMode("curated");
-    setSelectedBranch(branch);
-  };
+  const solvedCount = visibleProblems.filter((p) => solvedLocally[p.id]).length;
 
   return (
-    <div className="dsa-app">
-      {/* Navigation Drawer Component */}
-      <NavDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        currentBranch={selectedBranch}
-        onSelectBranch={handleBranchSelectFromDrawer}
+    <Container>
+      <PageHeader
+        title="DSA problems"
+        description="Curated branch-wise sheets with direct LeetCode links, plus a live feed from the Codeforces problemset API."
       />
 
-      {/* Top Navbar */}
-      <header className="dsa-navbar">
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+      {/* Mode switch */}
+      <div className="mt-6 flex flex-wrap gap-2">
+        {(
+          [
+            { id: "curated", label: "Curated sheets" },
+            { id: "live", label: "Live from Codeforces" },
+          ] as const
+        ).map((m) => (
           <button
-            onClick={() => setDrawerOpen(true)}
-            style={{
-              background: "#f3f0ff",
-              border: "1px solid #e0d9ff",
-              color: "#6c5ce7",
-              fontSize: "18px",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontWeight: 700,
-            }}
-            aria-label="Open Navigation Drawer"
+            key={m.id}
+            type="button"
+            onClick={() => setMode(m.id)}
+            className={cn(
+              "cursor-pointer rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+              mode === m.id
+                ? "border-accent bg-accent text-white"
+                : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
+            )}
           >
-            ☰ <span style={{ fontSize: "13px", color: "#4c3fb5" }}>Menu</span>
+            {m.label}
           </button>
+        ))}
+      </div>
 
-          <Link href="/" className="dsa-brand">
-            <div className="dsa-brand-logo">N</div>
-            <div className="dsa-brand-title">
-              Nextstep <span>DSA Hub</span>
-            </div>
-          </Link>
-        </div>
-
-        <div className="dsa-nav-modes">
-          <button
-            className={`dsa-mode-tab ${mode === "curated" ? "active" : ""}`}
-            onClick={() => setMode("curated")}
-          >
-            Curated Branch DSA
-          </button>
-          <button
-            className={`dsa-mode-tab ${mode === "live" ? "active" : ""}`}
-            onClick={() => setMode("live")}
-          >
-            ⚡ Live Codeforces API
-          </button>
-        </div>
-      </header>
-
-      {/* Engineering Branch Selector */}
+      {/* Branch filter (curated only) */}
       {mode === "curated" && (
-        <div className="dsa-branch-strip">
+        <div className="mt-4 flex flex-wrap gap-2">
           {BRANCH_OPTIONS.map((branch) => (
             <button
               key={branch}
-              className={`dsa-branch-btn ${selectedBranch === branch ? "active" : ""}`}
+              type="button"
               onClick={() => setSelectedBranch(branch)}
+              className={cn(
+                "cursor-pointer rounded-full border px-3.5 py-1 text-xs font-medium transition-colors",
+                selectedBranch === branch
+                  ? "border-ink bg-ink text-white"
+                  : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
+              )}
             >
               {branch}
             </button>
@@ -245,176 +205,212 @@ export default function DSAPage() {
         </div>
       )}
 
-      {/* Main Body */}
-      <div className="dsa-container">
-        {/* Left Topic Sidebar */}
+      {/* Live tag filter */}
+      {mode === "live" && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {CODEFORCES_TAGS.map((t) => (
+            <button
+              key={t.tag}
+              type="button"
+              onClick={() => setActiveLiveTag(t.tag)}
+              className={cn(
+                "cursor-pointer rounded-full border px-3.5 py-1 text-xs font-medium transition-colors",
+                activeLiveTag === t.tag
+                  ? "border-ink bg-ink text-white"
+                  : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="mt-7 grid gap-6 lg:grid-cols-[18rem_1fr]">
+        {/* Topic list */}
         {mode === "curated" && (
-          <aside className="dsa-sidebar">
-            <div className="dsa-section-header">
-              <span>Topics</span>
-              <span>{filteredTopics.length} Topics</span>
-            </div>
+          <aside>
+            <p className="px-1 pb-2.5 text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
+              Topics ({filteredTopics.length})
+            </p>
 
             {topicsStatus === "loading" && (
-              <div className="dsa-empty-state">Loading topics...</div>
+              <p className="px-1 text-sm text-ink-subtle">Loading topics…</p>
             )}
 
-            {topicsStatus === "ready" &&
-              filteredTopics.map((topic) => {
-                const percent = topic.totalProblems
-                  ? Math.round(((topic.solvedProblems || 0) / topic.totalProblems) * 100)
-                  : 0;
+            {topicsStatus === "error" && (
+              <p className="px-1 text-sm text-danger">Couldn&rsquo;t load topics.</p>
+            )}
 
+            <ul className="space-y-2">
+              {filteredTopics.map((topic) => {
+                const isActive = topic.id === activeTopicId;
                 return (
-                  <div
-                    key={topic.id}
-                    className={`dsa-topic-card ${topic.id === activeTopicId ? "active" : ""}`}
-                    onClick={() => setSelectedTopicId(topic.id)}
-                  >
-                    <div className="dsa-topic-card-top">
-                      <div className="dsa-topic-title">{topic.name}</div>
-                      <span className="dsa-topic-badge">{topic.branch}</span>
-                    </div>
-
-                    <div className="dsa-topic-desc">{topic.description}</div>
-
-                    <div className="dsa-progress-bar-bg">
-                      <div className="dsa-progress-bar-fill" style={{ width: `${percent}%` }} />
-                    </div>
-                  </div>
+                  <li key={topic.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTopicId(topic.id)}
+                      className={cn(
+                        "w-full cursor-pointer rounded-card border px-4 py-3 text-left transition-colors",
+                        isActive
+                          ? "border-accent bg-accent-soft"
+                          : "border-line bg-surface hover:border-line-strong",
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span
+                          className={cn(
+                            "text-sm font-semibold",
+                            isActive ? "text-accent" : "text-ink",
+                          )}
+                        >
+                          {topic.name}
+                        </span>
+                        <span className="shrink-0 text-xs text-ink-subtle">
+                          {topic.totalProblems}
+                        </span>
+                      </span>
+                      <span className="mt-1 block text-xs text-ink-subtle">
+                        {topic.branch}
+                      </span>
+                    </button>
+                  </li>
                 );
               })}
+            </ul>
           </aside>
         )}
 
-        {/* Right Main Content */}
-        <main className="dsa-main">
-          {mode === "curated" && activeTopic && (
-            <div className="dsa-main-header">
-              <div>
-                <h1 className="dsa-main-title">
-                  {activeTopic.name}
-                  <span className="dsa-topic-badge">{activeTopic.branch}</span>
-                </h1>
-                <p className="dsa-main-desc">{activeTopic.description}</p>
-              </div>
+        {/* Problem list */}
+        <div className={cn(mode === "live" && "lg:col-span-2")}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold">
+                {mode === "curated"
+                  ? (activeTopic?.name ?? "Problems")
+                  : CODEFORCES_TAGS.find((t) => t.tag === activeLiveTag)?.label}
+              </h2>
+              <p className="mt-0.5 text-sm text-ink-muted">
+                {problemsStatus === "ready"
+                  ? `${visibleProblems.length} problems · ${solvedCount} ticked`
+                  : problemsStatus === "loading"
+                    ? "Loading…"
+                    : ""}
+              </p>
             </div>
-          )}
 
-          {mode === "live" && (
-            <div className="dsa-main-header">
-              <div>
-                <h1 className="dsa-main-title">⚡ Live Codeforces API</h1>
-                <p className="dsa-main-desc">
-                  Real-time competitive programming & algorithm questions directly from Codeforces API.
-                </p>
-                <div style={{ display: "flex", gap: "8px", marginTop: "12px", flexWrap: "wrap" }}>
-                  {CODEFORCES_TAGS.map((t) => (
-                    <button
-                      key={t.tag}
-                      className={`dsa-branch-btn ${activeLiveTag === t.tag ? "active" : ""}`}
-                      onClick={() => setActiveLiveTag(t.tag)}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Search and Filters */}
-          <div className="dsa-controls">
-            <div className="dsa-search-box">
+            <div className="relative w-full sm:w-56">
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-ink-subtle" />
               <input
-                type="text"
-                className="dsa-search-input"
-                placeholder="Search problem title..."
+                type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search problems"
+                aria-label="Search problems"
+                className="w-full rounded-full border border-line bg-surface py-2 pr-4 pl-9 text-sm text-ink placeholder:text-ink-subtle focus:border-accent focus:outline-none"
               />
-            </div>
-
-            <div className="dsa-filter-group">
-              <button
-                className={`dsa-filter-pill ${filterStatus === "all" ? "active" : ""}`}
-                onClick={() => setFilterStatus("all")}
-              >
-                All
-              </button>
-              <button
-                className={`dsa-filter-pill ${filterStatus === "unsolved" ? "active" : ""}`}
-                onClick={() => setFilterStatus("unsolved")}
-              >
-                Unsolved
-              </button>
-              <button
-                className={`dsa-filter-pill ${filterStatus === "solved" ? "active" : ""}`}
-                onClick={() => setFilterStatus("solved")}
-              >
-                Solved
-              </button>
             </div>
           </div>
 
-          {/* Problems List */}
-          {problemsStatus === "loading" && (
-            <div className="dsa-empty-state">
-              <div className="dsa-empty-icon">🔄</div>
-              <div>Fetching problems...</div>
-            </div>
+          {activeTopic?.description && mode === "curated" && (
+            <p className="mt-3 text-sm leading-relaxed text-ink-muted">
+              {activeTopic.description}
+            </p>
           )}
 
-          {problemsStatus === "ready" && visibleProblems.length === 0 && (
-            <div className="dsa-empty-state">
-              <div className="dsa-empty-icon">🔍</div>
-              <div>No problems found matching search criteria.</div>
-            </div>
-          )}
+          <div className="mt-5">
+            {problemsStatus === "error" ? (
+              <EmptyState
+                title="Couldn't load problems"
+                description={
+                  mode === "live"
+                    ? "The Codeforces API didn't respond. It rate-limits heavy use — wait a moment and try again."
+                    : "Something went wrong fetching this topic."
+                }
+                action={
+                  <Button
+                    variant="secondary"
+                    onClick={() => setActiveLiveTag((t) => t)}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Retry
+                  </Button>
+                }
+              />
+            ) : problemsStatus === "loading" ? (
+              <div className="space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-14 animate-pulse rounded-input border border-line bg-surface"
+                  />
+                ))}
+              </div>
+            ) : visibleProblems.length === 0 ? (
+              <EmptyState
+                title="No problems match"
+                description="Try a different search term or topic."
+              />
+            ) : (
+              <Card className="divide-y divide-line overflow-hidden p-0">
+                {visibleProblems.map((problem) => (
+                  <div
+                    key={problem.id}
+                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-inset"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={Boolean(solvedLocally[problem.id])}
+                      onChange={() =>
+                        setSolvedLocally((prev) => ({
+                          ...prev,
+                          [problem.id]: !prev[problem.id],
+                        }))
+                      }
+                      aria-label={`Mark ${problem.title} as solved`}
+                      className="h-4 w-4 shrink-0 cursor-pointer accent-[var(--color-accent)]"
+                    />
 
-          {problemsStatus === "ready" && visibleProblems.length > 0 && (
-            <div className="dsa-problems-list">
-              {visibleProblems.map((problem) => (
-                <div
-                  key={problem.id}
-                  className={`dsa-problem-card ${problem.solved ? "solved" : ""}`}
-                >
-                  <div className="dsa-problem-left">
-                    <div
-                      className={`dsa-checkbox ${problem.solved ? "checked" : ""}`}
-                      onClick={() => toggleSolved(problem)}
+                    <span
+                      className={cn(
+                        "min-w-0 flex-1 text-sm",
+                        solvedLocally[problem.id]
+                          ? "text-ink-subtle line-through"
+                          : "text-ink",
+                      )}
                     >
-                      {problem.solved ? "✓" : ""}
-                    </div>
+                      {problem.title}
+                    </span>
 
-                    {problem.link ? (
+                    {problem.rating && (
+                      <Badge tone="neutral">{problem.rating}</Badge>
+                    )}
+                    <DifficultyBadge level={problem.difficulty} />
+
+                    {problem.link && (
                       <a
                         href={problem.link}
                         target="_blank"
-                        rel="noreferrer"
-                        className="dsa-problem-title-text"
+                        rel="noopener noreferrer"
+                        aria-label={`Open ${problem.title} in a new tab`}
+                        className="shrink-0 text-ink-subtle transition-colors hover:text-accent"
                       >
-                        {problem.title} ↗
+                        <ExternalLink className="h-4 w-4" />
                       </a>
-                    ) : (
-                      <span className="dsa-problem-title-text">{problem.title}</span>
                     )}
                   </div>
+                ))}
+              </Card>
+            )}
+          </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    {problem.rating && (
-                      <span className="dsa-topic-badge">Rating: {problem.rating}</span>
-                    )}
-                    <span className={`dsa-badge-difficulty ${problem.difficulty}`}>
-                      {problem.difficulty}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </main>
+          <p className="mt-5 rounded-card border border-line border-dashed bg-surface px-5 py-4 text-sm leading-relaxed text-ink-muted">
+            <span className="font-semibold text-ink">Ticks aren&rsquo;t saved yet.</span>{" "}
+            Marking a problem solved lasts for this visit only — per-user
+            progress needs a database table that doesn&rsquo;t exist yet.
+          </p>
+        </div>
       </div>
-    </div>
+    </Container>
   );
 }

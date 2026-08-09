@@ -1,13 +1,25 @@
 import type { Metadata } from "next";
+import { Fira_Sans } from "next/font/google";
 import "./globals.css";
+
+/**
+ * Self-hosted by next/font at build time — no external request, so it survives
+ * the strict CSP and does not shift layout while loading.
+ */
+const firaSans = Fira_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+  variable: "--font-fira-sans",
+});
 
 export const metadata: Metadata = {
   title: {
-    default: "NextStep — AI Placement & Career Development Engine",
+    default: "NextStep — Placement preparation for Terna Engineering College",
     template: "%s · NextStep",
   },
   description:
-    "Integrated placement preparation platform for engineering students with aptitude practice, AI skill-gap analysis, ATS resume builder, and company test series.",
+    "Aptitude practice, DSA problem sets and company test series for Terna Engineering College students. Sign in with your college Google account.",
 };
 
 export default function RootLayout({
@@ -16,12 +28,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
-      {/* Dark palette applied once here. Previously the body was light
-          (#F8F9FD) and every page overrode it, which flashed on navigation. */}
-      <body className="min-h-full flex flex-col font-sans bg-[#0B0F17] text-[#F8FAFC]">
-        {children}
-      </body>
+    <html lang="en" className={`${firaSans.variable} h-full`}>
+      <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );
 }

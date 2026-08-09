@@ -307,13 +307,21 @@ writing. If not, you now have a good question to ask.
 
 Pick these up in spare time, or slot them into a weekend that finishes early:
 
-1. **`/dsa` still uses the old purple/white theme** while the rest of the app is
-   dark. It works, but it looks like two different products. A design pass is
-   worth half a weekend.
-2. **12 ESLint warnings** — unused imports in `NavDrawer.tsx`, plus unused
-   `isAptitudeExpanded` / `isDsaExpanded` state that suggests a collapsible menu
-   was started and never finished. Either finish it or delete it.
-3. **No error boundaries.** Add `error.tsx` and `loading.tsx` to the route groups.
-4. **No rate limiting** on any API route.
-5. **`README.md` badge/demo section** — worth adding before you show this to
+1. **No error boundaries.** Add `error.tsx` and `loading.tsx` to the route groups.
+2. **No rate limiting** on any API route.
+3. **Only 6 aptitude questions exist**, across 6 of the 8 topics. Coding &
+   Decoding and Reading Comprehension have none and are shown as "no questions
+   yet". Writing more questions is the highest-value non-code work you can do —
+   the app is only as useful as its bank.
+4. **DSA solve ticks aren't persisted.** The checkbox works for the current
+   visit only; the screen says so plainly. Weekend 5 fixes it.
+5. **`README.md` demo section** — worth adding before you show this to
    recruiters.
+
+### Fixed on 9 Aug (UI rebuild)
+
+- Whole app rebuilt on one light design system (`#FF6500` accent, Fira Sans),
+  replacing the dark navy theme and the separate purple `/dsa` theme.
+- All fabricated data removed — see the README "What is real" table.
+- 15 mock API routes deleted; the remaining 6 all have auth guards.
+- ESLint down to **0 errors, 0 warnings**.

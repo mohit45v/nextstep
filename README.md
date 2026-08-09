@@ -195,9 +195,40 @@ src/
 
 ---
 
-## Current state
+## What is real
 
-Authentication, routing and the database schema are real. **Every API route
-under `src/app/api/` still returns hardcoded mock data** — replacing those with
-Prisma queries is the main body of remaining work. See [PLAN.md](PLAN.md) for the
-week-by-week roadmap.
+The app deliberately shows nothing it cannot back up. Where a number isn't
+measured, the screen says so instead of inventing one.
+
+| Area | Status |
+| --- | --- |
+| Google sign-in, Terna domain lock, sessions | Real — Postgres via Prisma |
+| Aptitude questions, explanations, formula cards | Real content, served from `src/data` (not yet in the DB) |
+| Mock test scoring (+4 / −1), timing, review | Real — scored server-side in `/api/aptitude/evaluate` |
+| DSA curated problems and LeetCode links | Real content, served from a route handler |
+| Codeforces live problems | Real — proxied from the Codeforces API, cached 5 min |
+| Practice history, accuracy, streaks, leaderboard | **Not built.** Shown as empty states |
+| DSA solve ticks | Session-only, not persisted. The screen says so |
+
+Attempts are not written to the database yet, so results vanish on refresh.
+That is Weekend 4 in [PLAN.md](PLAN.md).
+
+## Design system
+
+One light theme across every screen, defined once in
+[src/app/globals.css](src/app/globals.css) as Tailwind v4 `@theme` tokens:
+
+| Token | Value | Use |
+| --- | --- | --- |
+| `accent` | `#FF6500` | Primary actions, active nav |
+| `canvas` | `#F2F2F2` | Page background |
+| `surface` | `#FFFFFF` | Cards and panels |
+| `ink` / `ink-muted` / `ink-subtle` | `#111` / `#5C5C5C` / `#8A8A8A` | Text hierarchy |
+| `line` / `line-strong` | `#E5E5E5` / `#D4D4D4` | Borders |
+| `success` / `danger` / `warn` / `info` | — | Answer states, difficulty chips |
+
+Screens compose the primitives in [src/components/ui](src/components/ui)
+(`Button`, `Card`, `Badge`, `Container`, `PageHeader`, `EmptyState`, `Stat`)
+rather than writing one-off Tailwind. If a screen needs a hex literal, the
+palette is missing something — extend the tokens rather than working around
+them locally.

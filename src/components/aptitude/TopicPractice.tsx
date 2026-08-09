@@ -1,349 +1,362 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { 
-  CheckCircle2, 
-  XCircle, 
-  Lightbulb, 
-  Bookmark, 
-  BookmarkCheck, 
-  ArrowRight, 
-  HelpCircle,
-  Zap
-} from 'lucide-react';
-import { APTITUDE_TOPICS, SAMPLE_QUESTIONS, AptitudeQuestion } from '@/data/aptitudeData';
+import React, { useMemo, useState } from "react";
+import {
+  Bookmark,
+  BookmarkCheck,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Lightbulb,
+  X,
+} from "lucide-react";
+import {
+  APTITUDE_TOPICS,
+  SAMPLE_QUESTIONS,
+  questionsForTopic,
+  questionCountForTopic,
+} from "@/data/aptitudeData";
+import { cn } from "@/lib/cn";
+import {
+  Badge,
+  Button,
+  Card,
+  Container,
+  DifficultyBadge,
+  EmptyState,
+  PageHeader,
+} from "@/components/ui";
+
+const CATEGORIES = ["All", "Quantitative", "Logical Reasoning", "Verbal Ability"] as const;
+type Category = (typeof CATEGORIES)[number];
 
 interface TopicPracticeProps {
   initialTopicId?: string;
-  onBookmarkToggle?: (questionId: string) => void;
-  bookmarkedIds?: string[];
 }
 
-export const TopicPractice: React.FC<TopicPracticeProps> = ({
-  initialTopicId,
-  onBookmarkToggle,
-  bookmarkedIds = []
-}) => {
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [activeTopic, setActiveTopic] = useState<string | null>(initialTopicId || null);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [isAnswerSubmitted, setIsAnswerSubmitted] = useState<boolean>(false);
-  const [bookmarks, setBookmarks] = useState<string[]>(bookmarkedIds);
+export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) => {
+  const [category, setCategory] = useState<Category>("All");
+  const [activeTopicId, setActiveTopicId] = useState<string | null>(
+    initialTopicId ?? null,
+  );
+  const [index, setIndex] = useState(0);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const [bookmarks, setBookmarks] = useState<string[]>([]);
 
-  const questionsForPractice = activeTopic
-    ? SAMPLE_QUESTIONS.filter(q => q.topic.toLowerCase().replace(/ /g, '-') === activeTopic || q.topic === activeTopic)
-    : SAMPLE_QUESTIONS;
+  const topics = useMemo(
+    () =>
+      category === "All"
+        ? APTITUDE_TOPICS
+        : APTITUDE_TOPICS.filter((t) => t.category === category),
+    [category],
+  );
 
-  const currentQ: AptitudeQuestion | undefined = questionsForPractice[currentQuestionIndex] || SAMPLE_QUESTIONS[0];
+  /**
+   * Matched on `topicId`, not on a slugified topic name. The old code did
+   * `q.topic.toLowerCase().replace(/ /g, '-')`, which silently failed for
+   * "Syllogisms & Venn Diagrams" and "Error Spotting & Grammar" because the
+   * question's free-text topic did not match the topic's name.
+   */
+  const questions = useMemo(
+    () => (activeTopicId ? questionsForTopic(activeTopicId) : SAMPLE_QUESTIONS),
+    [activeTopicId],
+  );
 
-  const toggleBookmark = (id: string) => {
-    if (bookmarks.includes(id)) {
-      setBookmarks(bookmarks.filter(b => b !== id));
-    } else {
-      setBookmarks([...bookmarks, id]);
-    }
-    if (onBookmarkToggle) onBookmarkToggle(id);
-  };
+  const question = questions[index];
+  const activeTopic = APTITUDE_TOPICS.find((t) => t.id === activeTopicId) ?? null;
 
-  const handleOptionSelect = (index: number) => {
-    if (isAnswerSubmitted) return;
-    setSelectedOption(index);
-  };
+  function selectTopic(topicId: string | null) {
+    setActiveTopicId(topicId);
+    resetQuestionState(0);
+  }
 
-  const handleSubmitAnswer = () => {
-    if (selectedOption === null) return;
-    setIsAnswerSubmitted(true);
-  };
+  function resetQuestionState(nextIndex: number) {
+    setIndex(nextIndex);
+    setSelected(null);
+    setSubmitted(false);
+  }
 
-  const handleNextQuestion = () => {
-    if (currentQuestionIndex < questionsForPractice.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setSelectedOption(null);
-      setIsAnswerSubmitted(false);
-    }
-  };
-
-  const handlePrevQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1);
-      setSelectedOption(null);
-      setIsAnswerSubmitted(false);
-    }
-  };
-
-  const filteredTopics = selectedCategory === 'All'
-    ? APTITUDE_TOPICS
-    : APTITUDE_TOPICS.filter(t => t.category === selectedCategory);
+  function toggleBookmark(id: string) {
+    setBookmarks((prev) =>
+      prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id],
+    );
+  }
 
   return (
-    <div className="space-y-6 pb-12">
-      
-      {/* Category Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-white">Topic-Wise Practice Hub</h1>
-          <p className="text-xs text-slate-400">Master aptitude concepts with instant explanations and shortcut formulas</p>
-        </div>
+    <Container>
+      <PageHeader
+        title="Topic practice"
+        description="Answer, then see the full working — not just whether you were right."
+      />
 
-        <div className="flex items-center space-x-1 bg-[#131927] p-1 rounded-xl border border-[#262F40]">
-          {['All', 'Quantitative', 'Logical Reasoning', 'Verbal Ability'].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => {
-                setSelectedCategory(cat);
-                setActiveTopic(null);
-                setCurrentQuestionIndex(0);
-                setSelectedOption(null);
-                setIsAnswerSubmitted(false);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                selectedCategory === cat
-                  ? 'bg-[#6C5CE7] text-white shadow-md shadow-purple-900/40'
-                  : 'text-slate-400 hover:bg-[#1C2333] hover:text-white'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+      {/* Category filter */}
+      <div className="mt-6 flex flex-wrap gap-2">
+        {CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => {
+              setCategory(cat);
+              selectTopic(null);
+            }}
+            className={cn(
+              "cursor-pointer rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+              category === cat
+                ? "border-accent bg-accent text-white"
+                : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
+            )}
+          >
+            {cat}
+          </button>
+        ))}
       </div>
 
-      {/* Main Practice Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left Topic Selector List */}
-        <div className="lg:col-span-4 space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-xs font-bold uppercase text-slate-400">Topics ({filteredTopics.length})</span>
-            {activeTopic && (
+      <div className="mt-7 grid gap-6 lg:grid-cols-[19rem_1fr]">
+        {/* Topic list */}
+        <aside>
+          <div className="flex items-center justify-between px-1 pb-2.5">
+            <span className="text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
+              Topics ({topics.length})
+            </span>
+            {activeTopicId && (
               <button
-                onClick={() => {
-                  setActiveTopic(null);
-                  setCurrentQuestionIndex(0);
-                  setSelectedOption(null);
-                  setIsAnswerSubmitted(false);
-                }}
-                className="text-xs text-[#A29BFE] font-semibold hover:underline"
+                type="button"
+                onClick={() => selectTopic(null)}
+                className="cursor-pointer text-xs font-medium text-accent hover:underline"
               >
-                Clear Filter
+                Clear
               </button>
             )}
           </div>
 
-          <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-            {filteredTopics.map((topic) => {
-              const isSelected = activeTopic === topic.id || activeTopic === topic.name;
+          <ul className="space-y-2">
+            {topics.map((topic) => {
+              const count = questionCountForTopic(topic.id);
+              const isActive = topic.id === activeTopicId;
+              const isEmpty = count === 0;
+
               return (
-                <div
-                  key={topic.id}
-                  onClick={() => {
-                    setActiveTopic(topic.id);
-                    setCurrentQuestionIndex(0);
-                    setSelectedOption(null);
-                    setIsAnswerSubmitted(false);
-                  }}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-[#1C1936] border-[#6C5CE7] shadow-lg shadow-purple-950/50'
-                      : 'bg-[#131927] border-[#262F40] hover:border-[#6C5CE7]/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold text-white">{topic.name}</span>
-                    <span className="text-[10px] font-bold text-[#A29BFE] bg-[#6C5CE7]/20 px-2 py-0.5 rounded border border-[#6C5CE7]/30">
-                      {topic.accuracy}% Accuracy
+                <li key={topic.id}>
+                  <button
+                    type="button"
+                    disabled={isEmpty}
+                    onClick={() => selectTopic(topic.id)}
+                    className={cn(
+                      "w-full rounded-card border px-4 py-3 text-left transition-colors",
+                      isEmpty
+                        ? "cursor-not-allowed border-dashed border-line bg-surface opacity-60"
+                        : "cursor-pointer",
+                      !isEmpty && isActive
+                        ? "border-accent bg-accent-soft"
+                        : !isEmpty && "border-line bg-surface hover:border-line-strong",
+                    )}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span
+                        className={cn(
+                          "text-sm font-semibold",
+                          isActive ? "text-accent" : "text-ink",
+                        )}
+                      >
+                        {topic.name}
+                      </span>
+                      <span className="shrink-0 text-xs text-ink-subtle">
+                        {isEmpty ? "—" : count}
+                      </span>
                     </span>
-                  </div>
-                  <p className="text-xs text-slate-400 line-clamp-1">{topic.description}</p>
-                  
-                  {/* Progress Bar */}
-                  <div className="mt-3 space-y-1">
-                    <div className="flex justify-between text-[10px] text-slate-400 font-semibold">
-                      <span>Progress</span>
-                      <span>{topic.completedQuestions}/{topic.totalQuestions} Solved</span>
-                    </div>
-                    <div className="w-full bg-[#1C2333] h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className="bg-[#6C5CE7] h-full rounded-full"
-                        style={{ width: `${(topic.completedQuestions / topic.totalQuestions) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
+                    <span className="mt-1 block text-xs text-ink-subtle">
+                      {isEmpty ? "No questions yet" : topic.category}
+                    </span>
+                  </button>
+                </li>
               );
             })}
-          </div>
-        </div>
+          </ul>
+        </aside>
 
-        {/* Right Practice Question Card */}
-        <div className="lg:col-span-8 space-y-4">
-          {currentQ ? (
-            <div className="soft-card p-6 space-y-6">
-              
-              {/* Question Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-[#262F40]">
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-extrabold uppercase text-[#A29BFE] bg-[#6C5CE7]/20 px-2.5 py-1 rounded-md border border-[#6C5CE7]/30">
-                      {currentQ.category} • {currentQ.topic}
-                    </span>
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-md ${
-                      currentQ.difficulty === 'Easy' ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40' :
-                      currentQ.difficulty === 'Medium' ? 'bg-amber-950/60 text-amber-400 border border-amber-800/40' : 'bg-rose-950/60 text-rose-400 border border-rose-800/40'
-                    }`}>
-                      {currentQ.difficulty}
-                    </span>
-                  </div>
+        {/* Question workspace */}
+        <div>
+          {!question ? (
+            <EmptyState
+              title="No questions for this topic yet"
+              description="Pick another topic from the list — the ones with a number beside them have questions ready."
+            />
+          ) : (
+            <Card className="p-6">
+              {/* Question meta */}
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <DifficultyBadge level={question.difficulty} />
+                  <Badge tone="neutral">{question.topic}</Badge>
+                  {question.companyTags.slice(0, 2).map((tag) => (
+                    <Badge key={tag} tone="info">
+                      {tag}
+                    </Badge>
+                  ))}
                 </div>
 
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs font-bold text-slate-400">
-                    Question {currentQuestionIndex + 1} of {questionsForPractice.length}
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-ink-subtle">
+                    {index + 1} of {questions.length}
                   </span>
                   <button
-                    onClick={() => toggleBookmark(currentQ.id)}
-                    className="p-2 rounded-lg text-slate-400 hover:text-[#A29BFE] hover:bg-[#1C2333] transition-colors"
-                    title="Bookmark Question"
+                    type="button"
+                    onClick={() => toggleBookmark(question.id)}
+                    aria-label={
+                      bookmarks.includes(question.id)
+                        ? "Remove bookmark"
+                        : "Bookmark this question"
+                    }
+                    className="cursor-pointer text-ink-subtle transition-colors hover:text-accent"
                   >
-                    {bookmarks.includes(currentQ.id) ? (
-                      <BookmarkCheck className="w-5 h-5 text-[#6C5CE7] fill-[#6C5CE7]" />
+                    {bookmarks.includes(question.id) ? (
+                      <BookmarkCheck className="h-[18px] w-[18px] text-accent" />
                     ) : (
-                      <Bookmark className="w-5 h-5" />
+                      <Bookmark className="h-[18px] w-[18px]" />
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* Question Prompt */}
-              <div className="space-y-4">
-                <h3 className="text-base sm:text-lg font-bold text-white leading-relaxed">
-                  {currentQ.question}
-                </h3>
+              <p className="mt-5 text-[17px] leading-relaxed font-medium text-ink">
+                {question.question}
+              </p>
 
-                {/* Company Tag badges */}
-                <div className="flex items-center space-x-2 text-xs text-slate-400">
-                  <span className="font-semibold">Frequently Asked In:</span>
-                  {currentQ.companyTags.map(tag => (
-                    <span key={tag} className="bg-[#1C2333] border border-[#262F40] text-slate-300 font-semibold px-2 py-0.5 rounded text-[11px]">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              {/* Options */}
+              <div className="mt-5 space-y-2.5">
+                {question.options.map((option, i) => {
+                  const isCorrect = i === question.correctOption;
+                  const isPicked = i === selected;
 
-              {/* Options Grid */}
-              <div className="space-y-3">
-                {currentQ.options.map((option, idx) => {
-                  const isSelected = selectedOption === idx;
-                  const isCorrect = idx === currentQ.correctOption;
-
-                  let optionStyle = "bg-[#1C2333] border-[#262F40] hover:border-[#6C5CE7]/60 text-slate-200";
-
-                  if (isAnswerSubmitted) {
-                    if (isCorrect) {
-                      optionStyle = "bg-emerald-950/60 border-emerald-500 text-emerald-200 font-bold";
-                    } else if (isSelected && !isCorrect) {
-                      optionStyle = "bg-rose-950/60 border-rose-500 text-rose-200 font-bold";
-                    } else {
-                      optionStyle = "bg-[#131927] border-[#262F40] text-slate-500 opacity-60";
-                    }
-                  } else if (isSelected) {
-                    optionStyle = "bg-[#1C1936] border-[#6C5CE7] text-[#A29BFE] font-bold shadow-md shadow-purple-950/50";
-                  }
+                  const state = !submitted
+                    ? isPicked
+                      ? "picked"
+                      : "idle"
+                    : isCorrect
+                      ? "correct"
+                      : isPicked
+                        ? "wrong"
+                        : "idle";
 
                   return (
-                    <div
-                      key={idx}
-                      onClick={() => handleOptionSelect(idx)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex items-center justify-between ${optionStyle}`}
+                    <button
+                      key={i}
+                      type="button"
+                      disabled={submitted}
+                      onClick={() => setSelected(i)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-input border px-4 py-3 text-left transition-colors",
+                        !submitted && "cursor-pointer",
+                        state === "idle" &&
+                          "border-line bg-surface hover:border-line-strong",
+                        state === "picked" && "border-accent bg-accent-soft",
+                        state === "correct" && "border-success-line bg-success-soft",
+                        state === "wrong" && "border-danger-line bg-danger-soft",
+                      )}
                     >
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-7 h-7 rounded-lg font-bold text-xs flex items-center justify-center border ${
-                          isSelected ? 'bg-[#6C5CE7] text-white border-[#6C5CE7]' : 'bg-[#131927] text-slate-400 border-[#262F40]'
-                        }`}>
-                          {String.fromCharCode(65 + idx)}
-                        </div>
-                        <span className="text-sm font-medium">{option}</span>
-                      </div>
-
-                      {isAnswerSubmitted && isCorrect && (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                      )}
-                      {isAnswerSubmitted && isSelected && !isCorrect && (
-                        <XCircle className="w-5 h-5 text-rose-400" />
-                      )}
-                    </div>
+                      <span
+                        className={cn(
+                          "grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-bold",
+                          state === "idle" && "bg-inset text-ink-subtle",
+                          state === "picked" && "bg-accent text-white",
+                          state === "correct" && "bg-success text-white",
+                          state === "wrong" && "bg-danger text-white",
+                        )}
+                      >
+                        {state === "correct" ? (
+                          <Check className="h-4 w-4" strokeWidth={3} />
+                        ) : state === "wrong" ? (
+                          <X className="h-4 w-4" strokeWidth={3} />
+                        ) : (
+                          String.fromCharCode(65 + i)
+                        )}
+                      </span>
+                      <span className="text-[15px] text-ink">{option}</span>
+                    </button>
                   );
                 })}
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between pt-2">
-                <button
-                  onClick={handlePrevQuestion}
-                  disabled={currentQuestionIndex === 0}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-[#262F40] text-slate-300 hover:bg-[#1C2333] disabled:opacity-40"
-                >
-                  ← Previous
-                </button>
-
-                {!isAnswerSubmitted ? (
-                  <button
-                    onClick={handleSubmitAnswer}
-                    disabled={selectedOption === null}
-                    className="bg-[#6C5CE7] hover:bg-[#8257E5] text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md shadow-purple-900/40 disabled:opacity-40 transition-all"
+              {/* Explanation */}
+              {submitted && (
+                <div className="mt-5 space-y-3">
+                  <div
+                    className={cn(
+                      "rounded-input border px-4 py-3.5",
+                      selected === question.correctOption
+                        ? "border-success-line bg-success-soft"
+                        : "border-danger-line bg-danger-soft",
+                    )}
                   >
-                    Check Solution
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleNextQuestion}
-                    disabled={currentQuestionIndex === questionsForPractice.length - 1}
-                    className="bg-[#6C5CE7] hover:bg-[#8257E5] text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-md shadow-purple-900/40 flex items-center space-x-1.5"
-                  >
-                    <span>Next Question</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-
-              {/* Step-by-Step Explanation Box */}
-              {isAnswerSubmitted && (
-                <div className="p-5 rounded-2xl bg-[#1C2333] border border-[#262F40] space-y-4 animate-in fade-in">
-                  <div className="flex items-center space-x-2 text-[#A29BFE]">
-                    <Lightbulb className="w-5 h-5 text-[#A29BFE]" />
-                    <h4 className="font-bold text-sm text-white">Step-by-Step Mathematical Explanation</h4>
+                    <p
+                      className={cn(
+                        "text-sm font-semibold",
+                        selected === question.correctOption
+                          ? "text-success"
+                          : "text-danger",
+                      )}
+                    >
+                      {selected === question.correctOption
+                        ? "Correct"
+                        : `Not quite — the answer is ${String.fromCharCode(65 + question.correctOption)}`}
+                    </p>
+                    <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+                      {question.explanation}
+                    </p>
                   </div>
 
-                  <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed font-sans bg-[#131927] p-4 rounded-xl border border-[#262F40]">
-                    {currentQ.explanation}
-                  </p>
-
-                  {currentQ.shortcutTip && (
-                    <div className="p-3 bg-amber-950/40 border border-amber-800/40 rounded-xl text-amber-300 text-xs flex items-start space-x-2">
-                      <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  {question.shortcutTip && (
+                    <div className="flex gap-3 rounded-input border border-warn-line bg-warn-soft px-4 py-3.5">
+                      <Lightbulb className="h-[18px] w-[18px] shrink-0 text-warn" />
                       <div>
-                        <strong className="font-bold">Shortcut Trick: </strong>
-                        <span>{currentQ.shortcutTip}</span>
+                        <p className="text-sm font-semibold text-warn">Shortcut</p>
+                        <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+                          {question.shortcutTip}
+                        </p>
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-            </div>
-          ) : (
-            <div className="soft-card p-12 text-center text-slate-400 space-y-2">
-              <HelpCircle className="w-12 h-12 text-slate-600 mx-auto" />
-              <p className="font-bold text-white">No questions available for this topic yet.</p>
-              <p className="text-xs">Select another category or clear filters.</p>
-            </div>
+              {/* Controls */}
+              <div className="mt-6 flex items-center justify-between border-t border-line pt-5">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={index === 0}
+                  onClick={() => resetQuestionState(index - 1)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+
+                {!submitted ? (
+                  <Button disabled={selected === null} onClick={() => setSubmitted(true)}>
+                    Check answer
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={index >= questions.length - 1}
+                    onClick={() => resetQuestionState(index + 1)}
+                  >
+                    Next question
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
+              {submitted && index >= questions.length - 1 && (
+                <p className="mt-4 text-center text-sm text-ink-subtle">
+                  That&rsquo;s the last question in{" "}
+                  {activeTopic ? activeTopic.name : "this set"}.
+                </p>
+              )}
+            </Card>
           )}
         </div>
-
       </div>
-
-    </div>
+    </Container>
   );
 };

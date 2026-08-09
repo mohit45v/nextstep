@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireApiUser } from "@/lib/session";
 
 export interface DSATopic {
   id: string;
@@ -7,7 +8,6 @@ export interface DSATopic {
   description: string;
   branch: "General" | "CS & IT" | "AIDS" | "Electrical" | "Mechanical" | "Civil";
   totalProblems: number;
-  solvedProblems: number;
 }
 
 export const initialTopics: DSATopic[] = [
@@ -18,7 +18,6 @@ export const initialTopics: DSATopic[] = [
     description: "Fundamental memory layouts, search algorithms, prefix sums, and hash table lookups.",
     branch: "CS & IT",
     totalProblems: 8,
-    solvedProblems: 3,
   },
   {
     id: "trees-graphs",
@@ -27,7 +26,6 @@ export const initialTopics: DSATopic[] = [
     description: "Binary search trees, BFS/DFS, shortest paths, and topological sorting.",
     branch: "CS & IT",
     totalProblems: 7,
-    solvedProblems: 2,
   },
   {
     id: "dynamic-programming",
@@ -36,7 +34,6 @@ export const initialTopics: DSATopic[] = [
     description: "Memoization, tabulation, optimization problems, and knapsack variants.",
     branch: "CS & IT",
     totalProblems: 6,
-    solvedProblems: 1,
   },
   {
     id: "aids-spatial-trees",
@@ -45,7 +42,6 @@ export const initialTopics: DSATopic[] = [
     description: "Nearest neighbor search algorithms, Ball Trees, and high-dimensional vector spaces.",
     branch: "AIDS",
     totalProblems: 5,
-    solvedProblems: 2,
   },
   {
     id: "aids-matrix-nn",
@@ -54,7 +50,6 @@ export const initialTopics: DSATopic[] = [
     description: "SVD, LU decomposition, PageRank, and Graph Neural Network message passing.",
     branch: "AIDS",
     totalProblems: 5,
-    solvedProblems: 1,
   },
   {
     id: "ee-circuit-graphs",
@@ -63,7 +58,6 @@ export const initialTopics: DSATopic[] = [
     description: "Adjacency matrix representation of electrical grids, Kirchhoff equations, and PCB trace routing.",
     branch: "Electrical",
     totalProblems: 4,
-    solvedProblems: 1,
   },
   {
     id: "ee-fft-signal",
@@ -72,7 +66,6 @@ export const initialTopics: DSATopic[] = [
     description: "O(N log N) signal decomposition, frequency domain algorithms, and spectral analysis.",
     branch: "Electrical",
     totalProblems: 4,
-    solvedProblems: 0,
   },
   {
     id: "mech-kinematics-dp",
@@ -81,7 +74,6 @@ export const initialTopics: DSATopic[] = [
     description: "A* search and Dynamic Programming for robotic arm trajectory and collision-free path planning.",
     branch: "Mechanical",
     totalProblems: 4,
-    solvedProblems: 1,
   },
   {
     id: "mech-spatial-cad",
@@ -90,7 +82,6 @@ export const initialTopics: DSATopic[] = [
     description: "Octrees, CSG trees, convex hull algorithms, and 3D solid modeling data structures.",
     branch: "Mechanical",
     totalProblems: 4,
-    solvedProblems: 0,
   },
   {
     id: "civil-network-flow",
@@ -99,7 +90,6 @@ export const initialTopics: DSATopic[] = [
     description: "Ford-Fulkerson & Edmonds-Karp max-flow algorithms for fluid dynamics and urban traffic bottlenecks.",
     branch: "Civil",
     totalProblems: 4,
-    solvedProblems: 1,
   },
   {
     id: "civil-spatial-gis",
@@ -108,10 +98,12 @@ export const initialTopics: DSATopic[] = [
     description: "QuadTrees and R-Trees for land survey mapping, terrain elevation grids, and spatial queries.",
     branch: "Civil",
     totalProblems: 4,
-    solvedProblems: 0,
   },
 ];
 
 export async function GET() {
+  const user = await requireApiUser();
+  if (user instanceof Response) return user;
+
   return NextResponse.json(initialTopics);
 }

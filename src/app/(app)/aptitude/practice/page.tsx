@@ -1,4 +1,7 @@
+import type { Metadata } from "next";
 import { TopicPractice } from "@/components/aptitude/TopicPractice";
+
+export const metadata: Metadata = { title: "Topic practice" };
 
 /**
  * The topic lives in the query string rather than component state, so a

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { requireApiUser } from "@/lib/session";
 
 export async function GET(request: Request) {
+  const user = await requireApiUser();
+  if (user instanceof Response) return user;
+
   const { searchParams } = new URL(request.url);
   const tag = searchParams.get("tag") || "dp";
 
