@@ -1,121 +1,46 @@
-'use client';
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { ALLOWED_EMAIL_DOMAIN, DEFAULT_LOGIN_REDIRECT } from "@/lib/constants";
 
-import React, { useState } from 'react';
-import DashboardMain from "./components/DashboardMain/DashboardMain";
-import { Navbar, ScreenType } from './components/Navbar';
-import { NavDrawer } from './components/NavDrawer';
-import { AptitudeDashboard } from './components/AptitudeDashboard';
-import { TopicPractice } from './components/TopicPractice';
-import { CompanyTests } from './components/CompanyTests';
-import { MockExamSimulator } from './components/MockExamSimulator';
-import { QuestionReview } from './components/QuestionReview';
-import { FormulaCheatsheet } from './components/FormulaCheatsheet';
-import { ProgressAnalytics } from './components/ProgressAnalytics';
-import { CompanyTestPack } from './data/aptitudeData';
-
-export default function Home() {
-  const [currentScreen, setCurrentScreen] = useState<ScreenType>('dashboard');
-  const [selectedTopicId, setSelectedTopicId] = useState<string | undefined>(undefined);
-  const [selectedExamPack, setSelectedExamPack] = useState<CompanyTestPack | null>(null);
-  const [lastExamResults, setLastExamResults] = useState<any | null>(null);
-  const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
-
-  const handleNavigate = (screen: ScreenType) => {
-    setCurrentScreen(screen);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleStartTopicPractice = (topicId?: string) => {
-    setSelectedTopicId(topicId);
-    setCurrentScreen('practice');
-  };
-
-  const handleStartExamPack = (pack: CompanyTestPack) => {
-    setSelectedExamPack(pack);
-    setCurrentScreen('exam');
-  };
-
-  const handleFinishExam = (resultsPayload: any) => {
-    setLastExamResults(resultsPayload);
-    setSelectedExamPack(null);
-    setCurrentScreen('review');
-  };
+/**
+ * Public landing page. Signed-in students skip it entirely and go straight to
+ * the dashboard.
+ */
+export default async function LandingPage() {
+  const session = await auth();
+  if (session?.user) redirect(DEFAULT_LOGIN_REDIRECT);
 
   return (
-    <div className="min-h-screen bg-[#0B0F17] text-[#F8FAFC] flex flex-col font-sans">
-      
-      {/* Left Navigation Drawer */}
-      <NavDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-      />
-
-      {/* Top Header Navbar */}
-      <Navbar
-        currentScreen={currentScreen}
-        onSelectScreen={handleNavigate}
-        onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
-        readinessScore={78}
-        streakDays={14}
-      />
-
-      {/* Main Content Area */}
-      <main className="flex-1 w-full mx-auto">
-        {currentScreen === 'dashboard' && (
-          <DashboardMain />
-        )}
-
-        {currentScreen === 'practice' && (
-          <TopicPractice
-            initialTopicId={selectedTopicId}
-          />
-        )}
-
-        {currentScreen === 'company' && (
-          <CompanyTests
-            onStartExam={handleStartExamPack}
-          />
-        )}
-
-        {currentScreen === 'exam' && (
-          <MockExamSimulator
-            testPack={selectedExamPack}
-            onFinishExam={handleFinishExam}
-            onCancelExam={() => setCurrentScreen('company')}
-          />
-        )}
-
-        {currentScreen === 'review' && (
-          <QuestionReview
-            lastExamResults={lastExamResults}
-            onRetakeExam={() => setCurrentScreen('exam')}
-            onNavigateToTopics={() => setCurrentScreen('practice')}
-          />
-        )}
-
-        {currentScreen === 'formulas' && (
-          <FormulaCheatsheet />
-        )}
-
-        {currentScreen === 'analytics' && (
-          <ProgressAnalytics
-            onNavigateToPractice={handleStartTopicPractice}
-          />
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="bg-[#131927] border-t border-[#262F40] py-6 mt-12 text-center text-xs text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold text-white">NextStep Engine</span>
-            <span>•</span>
-            <span>AI Placement & Career Development Platform</span>
-          </div>
-          <p>© 2026 NextStep. Dark Mode Royal Blue Palette.</p>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[#0B0F17] px-4 py-16 text-[#F8FAFC]">
+      <div className="w-full max-w-2xl text-center">
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#2563EB] text-3xl font-bold text-white">
+          N
         </div>
-      </footer>
 
-    </div>
+        <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl">
+          NextStep
+        </h1>
+        <p className="mt-3 text-lg text-[#60A5FA]">
+          AI Placement &amp; Career Development Engine
+        </p>
+
+        <p className="mx-auto mt-6 max-w-xl text-slate-400">
+          Aptitude practice, DSA drilling, company test series, skill-gap
+          analysis and ATS resume tooling — built for Terna Engineering College.
+        </p>
+
+        <Link
+          href="/login"
+          className="mt-10 inline-flex items-center gap-2 rounded-xl bg-[#2563EB] px-8 py-3.5 font-semibold text-white transition hover:bg-[#1D4ED8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#60A5FA] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0B0F17]"
+        >
+          Sign in with your Terna account →
+        </Link>
+
+        <p className="mt-4 text-xs text-slate-500">
+          Restricted to <span className="font-mono">@{ALLOWED_EMAIL_DOMAIN}</span> accounts
+        </p>
+      </div>
+    </main>
   );
 }

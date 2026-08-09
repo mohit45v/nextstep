@@ -10,10 +10,13 @@ import {
   RotateCcw,
   ArrowRight
 } from 'lucide-react';
-import { SAMPLE_QUESTIONS } from '@/app/data/aptitudeData';
+import { SAMPLE_QUESTIONS } from "@/data/aptitudeData";
+import type { ExamResults } from "@/types";
+
+type FilterMode = 'all' | 'correct' | 'incorrect' | 'bookmarked';
 
 interface QuestionReviewProps {
-  lastExamResults?: any;
+  lastExamResults?: ExamResults | null;
   onRetakeExam?: () => void;
   onNavigateToTopics?: () => void;
 }
@@ -23,7 +26,7 @@ export const QuestionReview: React.FC<QuestionReviewProps> = ({
   onRetakeExam,
   onNavigateToTopics
 }) => {
-  const [filterMode, setFilterMode] = useState<'all' | 'correct' | 'incorrect' | 'bookmarked'>('all');
+  const [filterMode, setFilterMode] = useState<FilterMode>('all');
   const [bookmarks, setBookmarks] = useState<string[]>(['q1', 'q4']);
 
   const results = lastExamResults || {
@@ -59,7 +62,7 @@ export const QuestionReview: React.FC<QuestionReviewProps> = ({
     }
   };
 
-  const filteredItems = results.detailedResults.filter((item: any) => {
+  const filteredItems = results.detailedResults.filter((item) => {
     if (filterMode === 'correct') return item.isCorrect;
     if (filterMode === 'incorrect') return !item.isCorrect && !item.isSkipped;
     if (filterMode === 'bookmarked') return bookmarks.includes(item.questionId);
@@ -134,15 +137,15 @@ export const QuestionReview: React.FC<QuestionReviewProps> = ({
       {/* Filter Tabs */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-1 bg-[#131927] p-1 rounded-xl border border-[#262F40]">
-          {[
+          {([
             { id: 'all', label: `All (${results.detailedResults.length})` },
             { id: 'correct', label: `Correct (${results.correctCount})` },
             { id: 'incorrect', label: `Incorrect (${results.incorrectCount})` },
             { id: 'bookmarked', label: `Bookmarked (${bookmarks.length})` }
-          ].map(tab => (
+          ] satisfies ReadonlyArray<{ id: FilterMode; label: string }>).map(tab => (
             <button
               key={tab.id}
-              onClick={() => setFilterMode(tab.id as any)}
+              onClick={() => setFilterMode(tab.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 filterMode === tab.id
                   ? 'bg-[#6C5CE7] text-white shadow-md shadow-purple-900/40'
@@ -157,7 +160,7 @@ export const QuestionReview: React.FC<QuestionReviewProps> = ({
 
       {/* Question Breakdown List */}
       <div className="space-y-6">
-        {filteredItems.map((item: any, idx: number) => {
+        {filteredItems.map((item, idx) => {
           const isBookmarked = bookmarks.includes(item.questionId);
 
           return (

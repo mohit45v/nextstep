@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { APTITUDE_TOPICS } from '@/app/data/aptitudeData';
+import { APTITUDE_TOPICS } from '@/data/aptitudeData';
 
 export async function GET() {
   const overallQuestionsSolved = APTITUDE_TOPICS.reduce((sum, t) => sum + t.completedQuestions, 0);

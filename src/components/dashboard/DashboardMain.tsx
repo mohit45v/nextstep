@@ -1,27 +1,19 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
-import NavDrawer from "../NavDrawer";
-import LoginModal from "../LoginModal/LoginModal";
-import StreakHeatmap from "../StreakHeatmap/StreakHeatmap";
+import StreakHeatmap from "./StreakHeatmap";
 import "./DashboardMain.css";
 
-interface UserProfile {
+/**
+ * The signed-in student, passed down from the server component that read the
+ * session. This used to be hardcoded `useState` with a fake "Alex Vance", and
+ * the component rendered its own NavDrawer and navbar on top of the ones in
+ * AppShell — both are gone now.
+ */
+export interface DashboardUser {
   name: string;
-  role: "Student" | "Faculty";
   credits: number;
 }
 
-export default function DashboardMain() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
-  const [user, setUser] = useState<UserProfile>({
-    name: "Alex Vance (CSE '26)",
-    role: "Student",
-    credits: 250,
-  });
-
+export default function DashboardMain({ user }: { user: DashboardUser }) {
   const modules = [
     {
       num: 1,
@@ -155,54 +147,6 @@ export default function DashboardMain() {
 
   return (
     <div className="dashboard-root">
-      {/* Navigation Drawer Component */}
-      <NavDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
-
-      {/* Login Modal */}
-      <LoginModal
-        isOpen={loginModalOpen}
-        onClose={() => setLoginModalOpen(false)}
-        onLoginSuccess={(u) => setUser(u)}
-      />
-
-      {/* Navbar */}
-      <header className="dash-navbar">
-        <div className="dash-brand-group">
-          <button className="menu-trigger-btn" onClick={() => setDrawerOpen(true)}>
-            <span>☰</span>
-            <span>Modules Menu</span>
-          </button>
-
-          <div className="dash-brand-title">
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                background: "linear-gradient(135deg, #6c5ce7, #a29bfe)",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 800,
-                fontSize: 18,
-              }}
-            >
-              N
-            </div>
-            Nextstep <span>Dashboard</span>
-          </div>
-        </div>
-
-        <div className="dash-user-controls">
-          <div className="credit-badge">🪙 {user.credits} AI Credits</div>
-          <div className="streak-counter">🔥 14 Days</div>
-          <button className="login-trigger-btn" onClick={() => setLoginModalOpen(true)}>
-            👤 {user.name}
-          </button>
-        </div>
-      </header>
-
       {/* Hero Welcome Banner */}
       <section className="dash-hero-section">
         <div className="dash-hero-card animate-fade-in">
@@ -213,6 +157,9 @@ export default function DashboardMain() {
             <p className="hero-subtitle">
               Your placement engine is active. Track daily streaks, practice DSA, and analyze skill gaps.
             </p>
+            <div className="credit-badge" style={{ marginTop: 12, display: "inline-flex" }}>
+              🪙 {user.credits} AI Credits
+            </div>
           </div>
 
           <Link href="/dsa" className="hero-action-btn">

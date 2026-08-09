@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import DSAPage from "./DSAPage";
+import DSAPage from "@/components/dsa/DSAPage";
 
 export const metadata: Metadata = {
-  title: "DSA Practice Hub | Nextstep",
+  title: "DSA Practice Hub",
   description:
     "Data Structures & Algorithms problem browser for all engineering branches with live Codeforces API integration.",
 };

@@ -7,7 +7,7 @@ import {
   CheckCircle2, 
   Award
 } from 'lucide-react';
-import { APTITUDE_TOPICS } from '@/app/data/aptitudeData';
+import { APTITUDE_TOPICS } from '@/data/aptitudeData';
 
 interface ProgressAnalyticsProps {
   onNavigateToPractice: (topicId: string) => void;

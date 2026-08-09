@@ -7,7 +7,7 @@ import {
   Copy, 
   Check
 } from 'lucide-react';
-import { FORMULA_CARDS, FormulaCard } from '@/app/data/aptitudeData';
+import { FORMULA_CARDS, FormulaCard } from '@/data/aptitudeData';
 
 export const FormulaCheatsheet: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');

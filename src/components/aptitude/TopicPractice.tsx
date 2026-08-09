@@ -11,7 +11,7 @@ import {
   HelpCircle,
   Zap
 } from 'lucide-react';
-import { APTITUDE_TOPICS, SAMPLE_QUESTIONS, AptitudeQuestion } from '@/app/data/aptitudeData';
+import { APTITUDE_TOPICS, SAMPLE_QUESTIONS, AptitudeQuestion } from '@/data/aptitudeData';
 
 interface TopicPracticeProps {
   initialTopicId?: string;

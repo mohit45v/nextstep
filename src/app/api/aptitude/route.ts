@@ -5,7 +5,7 @@ import {
   COMPANY_PACKS, 
   FORMULA_CARDS, 
   SMART_RECOMMENDATIONS 
-} from '@/app/data/aptitudeData';
+} from '@/data/aptitudeData';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

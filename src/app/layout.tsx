@@ -2,8 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NextStep - AI Placement & Career Development Engine",
-  description: "Integrated placement preparation platform for engineering students with aptitude practice, AI skill-gap analysis, ATS resume builder, and company test series.",
+  title: {
+    default: "NextStep — AI Placement & Career Development Engine",
+    template: "%s · NextStep",
+  },
+  description:
+    "Integrated placement preparation platform for engineering students with aptitude practice, AI skill-gap analysis, ATS resume builder, and company test series.",
 };
 
 export default function RootLayout({
@@ -13,7 +17,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col font-sans bg-[#F8F9FD] text-[#1E1B4B]">
+      {/* Dark palette applied once here. Previously the body was light
+          (#F8F9FD) and every page overrode it, which flashed on navigation. */}
+      <body className="min-h-full flex flex-col font-sans bg-[#0B0F17] text-[#F8FAFC]">
         {children}
       </body>
     </html>

@@ -6,7 +6,7 @@ import {
   Clock, 
   ArrowRight
 } from 'lucide-react';
-import { COMPANY_PACKS, CompanyTestPack } from '@/app/data/aptitudeData';
+import { COMPANY_PACKS, CompanyTestPack } from '@/data/aptitudeData';
 
 interface CompanyTestsProps {
   onStartExam: (testPack: CompanyTestPack) => void;

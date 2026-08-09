@@ -13,8 +13,8 @@ import {
   Zap,
   BookOpen
 } from 'lucide-react';
-import { ScreenType } from './Navbar';
-import { SMART_RECOMMENDATIONS, APTITUDE_TOPICS, COMPANY_PACKS } from '@/app/data/aptitudeData';
+import { ScreenType } from '@/lib/routes';
+import { SMART_RECOMMENDATIONS, APTITUDE_TOPICS, COMPANY_PACKS } from '@/data/aptitudeData';
 
 interface DashboardProps {
   onNavigate: (screen: ScreenType) => void;

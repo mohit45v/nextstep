@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Timer, 
   Bookmark, 
@@ -8,11 +8,12 @@ import {
   AlertTriangle,
   Send
 } from 'lucide-react';
-import { SAMPLE_QUESTIONS, CompanyTestPack, AptitudeQuestion } from '@/app/data/aptitudeData';
+import { SAMPLE_QUESTIONS, CompanyTestPack, AptitudeQuestion } from "@/data/aptitudeData";
+import type { ExamResults } from "@/types";
 
 interface MockExamSimulatorProps {
   testPack?: CompanyTestPack | null;
-  onFinishExam: (resultsPayload: any) => void;
+  onFinishExam: (resultsPayload: ExamResults) => void;
   onCancelExam: () => void;
 }
 
@@ -30,20 +31,34 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
   const [markedForReview, setMarkedForReview] = useState<Record<string, boolean>>({});
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
 
+  /**
+   * Always points at the current render's `executeSubmission`, so the timer
+   * below can call it without listing it as a dependency.
+   *
+   * This also fixes a real bug: the countdown used to call `handleAutoSubmit()`
+   * from inside a `setSecondsRemaining` updater with `[]` deps, so it captured
+   * the first render's closure. Running out of time submitted an empty answer
+   * sheet no matter what the student had filled in.
+   */
+  const executeSubmissionRef = useRef<() => void>(undefined);
+  const hasAutoSubmitted = useRef(false);
+
+  // Countdown only — the updater stays pure.
   useEffect(() => {
     const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
+      setSecondsRemaining((prev) => (prev <= 0 ? 0 : prev - 1));
     }, 1000);
 
     return () => clearInterval(timer);
   }, []);
+
+  // Submit exactly once when the clock hits zero.
+  useEffect(() => {
+    if (secondsRemaining === 0 && !hasAutoSubmitted.current) {
+      hasAutoSubmitted.current = true;
+      executeSubmissionRef.current?.();
+    }
+  }, [secondsRemaining]);
 
   const formatTime = (secs: number) => {
     const m = Math.floor(secs / 60);
@@ -65,10 +80,6 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
       ...prev,
       [currentQuestion.id]: !prev[currentQuestion.id]
     }));
-  };
-
-  const handleAutoSubmit = () => {
-    executeSubmission();
   };
 
   const executeSubmission = async () => {
@@ -116,10 +127,16 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
           }))
         });
       }
-    } catch (e) {
+    } catch {
       onCancelExam();
     }
   };
+
+  // Refresh the ref after every render so the timer above always calls the
+  // current closure, with the answers the student has actually entered.
+  useEffect(() => {
+    executeSubmissionRef.current = executeSubmission;
+  });
 
   const answeredCount = Object.keys(answers).length;
   const reviewCount = Object.values(markedForReview).filter(Boolean).length;

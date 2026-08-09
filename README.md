@@ -1,36 +1,203 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NextStep
 
-## Getting Started
+AI placement & career development platform for **Terna Engineering College** —
+aptitude practice, DSA drilling, company test series, skill-gap analysis and ATS
+resume tooling.
 
-First, run the development server:
+Sign-in is restricted to `@ternaengg.ac.in` Google Workspace accounts.
+
+---
+
+## Stack
+
+| Layer    | Choice                                        |
+| -------- | --------------------------------------------- |
+| Framework| Next.js 16 (App Router, React 19, Turbopack)   |
+| Language | TypeScript (strict)                           |
+| Styling  | Tailwind CSS v4 + component-scoped CSS files   |
+| Auth     | Auth.js v5 (NextAuth) — Google OAuth, domain-locked |
+| Database | PostgreSQL (Neon) via Prisma 7                |
+| Icons    | lucide-react                                  |
+
+---
+
+## Getting started
+
+### 1. Install
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Create a database
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Sign up at [neon.tech](https://neon.tech) (free, no card), create a project, and
+copy the connection string. It looks like:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+postgresql://user:pass@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+```
 
-## Learn More
+### 3. Create a Google OAuth client
 
-To learn more about Next.js, take a look at the following resources:
+1. Open the [Google Cloud Console credentials page](https://console.cloud.google.com/apis/credentials)
+2. Create a project (e.g. `nextstep`)
+3. **Create Credentials → OAuth client ID → Web application**
+4. Add these exactly (the port must match, or you get `redirect_uri_mismatch`):
+   - Authorised JavaScript origin: `http://localhost:3001`
+   - Authorised redirect URI: `http://localhost:3001/api/auth/callback/google`
+5. Copy the Client ID and Client Secret
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+> **Why 3001?** Google matches the redirect URI character for character, port
+> included. `npm run dev` is pinned to `-p 3001` in `package.json` so the URI is
+> stable — without the flag, Next.js silently picks the next free port when
+> something else holds 3000 and every sign-in fails. If you change the port, add
+> the matching URI in the Google console too.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 4. Configure environment
 
-## Deploy on Vercel
+```bash
+cp .env.example .env
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Fill in `DATABASE_URL`, `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`. Generate a
+secret with:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npx auth secret
+```
+
+### 5. Create the tables and run
+
+```bash
+npm run db:migrate
+npm run dev
+```
+
+Open <http://localhost:3000>.
+
+---
+
+## Troubleshooting sign-in
+
+**`Error 400: redirect_uri_mismatch`**
+
+Google compares the redirect URI character for character, port included. The
+`redirect_uri=` value in the error message is what your app actually sent —
+register exactly that string in the Google console. `npm run dev` is pinned to
+port 3001 so this stays stable; if you change the port, update the console too.
+
+**`?error=Configuration` on the login page**
+
+Auth.js reports database/adapter failures under this code, so check the database
+first — the server terminal has the real error. Usual causes:
+
+- `DATABASE_URL` still holds the placeholder from `.env.example`
+- The migration was never applied → run `npm run db:migrate`
+- The database is unreachable (a local `npx prisma dev` server that has stopped)
+
+**No database yet?** `npx prisma dev --name nextstep` starts a local Postgres
+with no signup. Note it picks a **new port each restart**, so you have to update
+`DATABASE_URL` each time — fine for a quick start, but Neon is less friction and
+you need it for deployment anyway.
+
+**Shadow database.** `prisma migrate dev` needs a scratch database to detect
+drift. Hosted Postgres like Neon lets Prisma create one on the fly, so leave
+`SHADOW_DATABASE_URL` unset. Only set it if a provider forbids `CREATE DATABASE`.
+
+---
+
+## How the Terna-only login works
+
+Three independent layers, all of which must agree:
+
+1. **Google's account chooser** — the provider sends `hd=ternaengg.ac.in`, so
+   Google only offers Terna accounts. This is a UX hint and *can* be bypassed by
+   hand-crafting the OAuth URL, so it is never relied on alone.
+2. **The `signIn` callback** ([src/lib/auth.config.ts](src/lib/auth.config.ts)) —
+   the real gate. Rejects the sign-in unless Google reports
+   `email_verified: true`, a hosted domain (`hd`) of exactly `ternaengg.ac.in`,
+   and an email ending in `@ternaengg.ac.in`.
+3. **The `createUser` event** ([src/lib/auth.ts](src/lib/auth.ts)) — deletes any
+   user row that somehow gets created outside the domain.
+
+Route protection is handled by [src/proxy.ts](src/proxy.ts) (Next.js 16 renamed
+the `middleware` convention to `proxy`), which redirects anonymous visitors to
+`/login`. Server components additionally call `requireUser()` from
+[src/lib/session.ts](src/lib/session.ts), so the guarantee holds even if the
+matcher is ever misconfigured.
+
+To change the allowed domain, edit `ALLOWED_EMAIL_DOMAIN` in
+[src/lib/constants.ts](src/lib/constants.ts) — it is the single source of truth.
+
+---
+
+## Directory structure
+
+```
+prisma/
+  schema.prisma            Database models (Auth.js + app tables)
+
+src/
+  app/
+    layout.tsx             Root layout — dark theme, metadata template
+    page.tsx               Public landing page
+    login/                 Sign-in page (Google button, error messages)
+    (app)/                 Route group: everything behind auth
+      layout.tsx           Calls requireUser(), renders the AppShell
+      dashboard/
+      aptitude/            page + practice/ companies/ exam/ review/
+                           formulas/ analytics/
+    dsa/                   Outside (app) — ships its own navbar & drawer
+    api/                   Route handlers
+      auth/[...nextauth]/  Auth.js endpoints
+
+  components/
+    auth/                  SignOutButton
+    layout/                Navbar, NavDrawer, AppShell
+    dashboard/             DashboardMain, StreakHeatmap
+    aptitude/              The seven aptitude screens + session provider
+    dsa/                   DSAPage
+    ui/                    (shared primitives — currently empty)
+
+  lib/
+    auth.ts                Full Auth.js config (Node runtime, Prisma adapter)
+    auth.config.ts         Edge-safe half, shared with proxy.ts
+    session.ts             requireUser / requireRole / requireApiUser
+    prisma.ts              PrismaClient singleton
+    constants.ts           ALLOWED_EMAIL_DOMAIN and friends
+    routes.ts              ScreenType → URL map
+
+  data/                    Static seed data (aptitude questions, formulas)
+  types/                   Shared types + next-auth module augmentation
+  hooks/                   (custom hooks — currently empty)
+  generated/prisma/        Prisma Client output (gitignored)
+
+  proxy.ts                 Route protection (formerly middleware.ts)
+```
+
+**Import alias:** `@/*` maps to `src/*`, so `@/lib/auth` resolves to
+`src/lib/auth.ts`.
+
+---
+
+## Scripts
+
+| Command              | What it does                                  |
+| -------------------- | --------------------------------------------- |
+| `npm run dev`        | Dev server on :3000                           |
+| `npm run build`      | Production build                              |
+| `npm run typecheck`  | TypeScript, no emit                           |
+| `npm run lint`       | ESLint                                        |
+| `npm run db:migrate` | Create + apply a migration                    |
+| `npm run db:push`    | Push schema without a migration (prototyping) |
+| `npm run db:studio`  | Browse the database in a GUI                  |
+
+---
+
+## Current state
+
+Authentication, routing and the database schema are real. **Every API route
+under `src/app/api/` still returns hardcoded mock data** — replacing those with
+Prisma queries is the main body of remaining work. See [PLAN.md](PLAN.md) for the
+week-by-week roadmap.

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { SAMPLE_QUESTIONS } from '@/app/data/aptitudeData';
+import { SAMPLE_QUESTIONS } from '@/data/aptitudeData';
 
 interface UserSubmission {
   questionId: string;

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import NavDrawer from "../components/NavDrawer";
+import NavDrawer from "@/components/layout/NavDrawer";
 import "./DSAPage.css";
 
 export interface DSATopic {
@@ -51,7 +51,7 @@ export default function DSAPage() {
 
   const [topics, setTopics] = useState<DSATopic[]>([]);
   const [topicsStatus, setTopicsStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [activeTopicId, setActiveTopicId] = useState<string | null>(null);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
 
   const [problems, setProblems] = useState<DSAProblem[]>([]);
   const [problemsStatus, setProblemsStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -60,63 +60,73 @@ export default function DSAPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "unsolved" | "solved">("all");
 
-  const loadTopics = useCallback(() => {
-    setTopicsStatus("loading");
-    fetch("/api/dsa/topics")
-      .then((res) => res.json())
-      .then((data: DSATopic[]) => {
+  useEffect(() => {
+    if (mode !== "curated") return;
+
+    const controller = new AbortController();
+
+    (async () => {
+      setTopicsStatus("loading");
+      try {
+        const res = await fetch("/api/dsa/topics", { signal: controller.signal });
+        const data: DSATopic[] = await res.json();
         setTopics(data);
         setTopicsStatus("ready");
-        if (data.length > 0) setActiveTopicId(data[0].id);
-      })
-      .catch(() => setTopicsStatus("error"));
-  }, []);
+      } catch {
+        if (!controller.signal.aborted) setTopicsStatus("error");
+      }
+    })();
 
-  useEffect(() => {
-    if (mode === "curated") loadTopics();
-  }, [mode, loadTopics]);
-
-  const loadProblems = useCallback((topicId: string | null) => {
-    if (!topicId) return;
-    setProblemsStatus("loading");
-    fetch(`/api/dsa/topics/${topicId}/problems`)
-      .then((res) => res.json())
-      .then((data: DSAProblem[]) => {
-        setProblems(data);
-        setProblemsStatus("ready");
-      })
-      .catch(() => setProblemsStatus("error"));
-  }, []);
-
-  const loadLiveProblems = useCallback((tag: string) => {
-    setProblemsStatus("loading");
-    fetch(`/api/dsa/external/codeforces?tag=${encodeURIComponent(tag)}`)
-      .then((res) => res.json())
-      .then((data: { problems: DSAProblem[] }) => {
-        setProblems(data.problems || []);
-        setProblemsStatus("ready");
-      })
-      .catch(() => setProblemsStatus("error"));
-  }, []);
-
-  useEffect(() => {
-    if (mode === "curated" && activeTopicId) {
-      loadProblems(activeTopicId);
-    } else if (mode === "live") {
-      loadLiveProblems(activeLiveTag);
-    }
-  }, [mode, activeTopicId, activeLiveTag, loadProblems, loadLiveProblems]);
+    return () => controller.abort();
+  }, [mode]);
 
   const filteredTopics = useMemo(() => {
     if (selectedBranch === "All Branches") return topics;
     return topics.filter((t) => t.branch === selectedBranch);
   }, [topics, selectedBranch]);
 
-  useEffect(() => {
-    if (filteredTopics.length > 0 && !filteredTopics.some((t) => t.id === activeTopicId)) {
-      setActiveTopicId(filteredTopics[0].id);
+  /**
+   * Derived rather than stored. The old code kept `activeTopicId` in state and
+   * corrected it from an effect whenever the branch filter changed, which cost
+   * an extra render pass and briefly rendered a topic that wasn't in the list.
+   * Falling back to the first visible topic here means there is never an
+   * inconsistent frame.
+   */
+  const activeTopicId = useMemo(() => {
+    if (selectedTopicId && filteredTopics.some((t) => t.id === selectedTopicId)) {
+      return selectedTopicId;
     }
-  }, [filteredTopics, activeTopicId]);
+    return filteredTopics[0]?.id ?? null;
+  }, [filteredTopics, selectedTopicId]);
+
+  useEffect(() => {
+    const url =
+      mode === "curated"
+        ? activeTopicId
+          ? `/api/dsa/topics/${activeTopicId}/problems`
+          : null
+        : `/api/dsa/external/codeforces?tag=${encodeURIComponent(activeLiveTag)}`;
+
+    if (!url) return;
+
+    // Aborting on change stops a slow response for the previous topic from
+    // overwriting the current one.
+    const controller = new AbortController();
+
+    (async () => {
+      setProblemsStatus("loading");
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        const data = await res.json();
+        setProblems(mode === "curated" ? data : (data.problems ?? []));
+        setProblemsStatus("ready");
+      } catch {
+        if (!controller.signal.aborted) setProblemsStatus("error");
+      }
+    })();
+
+    return () => controller.abort();
+  }, [mode, activeTopicId, activeLiveTag]);
 
   const activeTopic = useMemo(
     () => topics.find((t) => t.id === activeTopicId) || null,
@@ -259,7 +269,7 @@ export default function DSAPage() {
                   <div
                     key={topic.id}
                     className={`dsa-topic-card ${topic.id === activeTopicId ? "active" : ""}`}
-                    onClick={() => setActiveTopicId(topic.id)}
+                    onClick={() => setSelectedTopicId(topic.id)}
                   >
                     <div className="dsa-topic-card-top">
                       <div className="dsa-topic-title">{topic.name}</div>
