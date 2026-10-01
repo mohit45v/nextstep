@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Bookmark,
   BookmarkCheck,
@@ -10,12 +11,6 @@ import {
   Lightbulb,
   X,
 } from "lucide-react";
-import {
-  APTITUDE_TOPICS,
-  SAMPLE_QUESTIONS,
-  questionsForTopic,
-  questionCountForTopic,
-} from "@/data/aptitudeData";
 import { cn } from "@/lib/cn";
 import {
   Badge,
@@ -26,89 +21,143 @@ import {
   EmptyState,
   PageHeader,
 } from "@/components/ui";
-
-const CATEGORIES = ["All", "Quantitative", "Logical Reasoning", "Verbal Ability"] as const;
-type Category = (typeof CATEGORIES)[number];
+import { CATEGORY_FILTERS, type CategoryFilter } from "@/lib/aptitude-labels";
+import { practiceRoute, reviewRoute } from "@/lib/routes";
+import type { PracticeQuestion, TopicSummary } from "@/types/aptitude";
 
 interface TopicPracticeProps {
-  initialTopicId?: string;
+  topics: TopicSummary[];
+  activeTopic: TopicSummary | null;
+  questions: PracticeQuestion[];
+  category: CategoryFilter;
 }
 
-export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) => {
-  const [category, setCategory] = useState<Category>("All");
-  const [activeTopicId, setActiveTopicId] = useState<string | null>(
-    initialTopicId ?? null,
-  );
+/**
+ * Self-paced practice: one question, answer, full working.
+ *
+ * Two things moved out of this component when the bank went into Postgres.
+ *
+ *  * **Which questions to show.** The topic and the category filter are in the
+ *    URL, and the server fetches that topic's questions. The old version held
+ *    every question in the bundle and filtered in the browser — fine for six
+ *    questions, hopeless for a few thousand.
+ *  * **What counts as practice.** Each checked answer is posted to
+ *    /api/aptitude/practice, which decides right or wrong from the database and
+ *    appends it to one practice attempt. That is what makes the accuracy on
+ *    /aptitude/analytics real rather than an invented number.
+ */
+export function TopicPractice({
+  topics,
+  activeTopic,
+  questions,
+  category,
+}: TopicPracticeProps) {
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState(false);
-  const [bookmarks, setBookmarks] = useState<string[]>([]);
-
-  const topics = useMemo(
-    () =>
-      category === "All"
-        ? APTITUDE_TOPICS
-        : APTITUDE_TOPICS.filter((t) => t.category === category),
-    [category],
+  const [bookmarks, setBookmarks] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(questions.map((q) => [q.id, q.isBookmarked])),
   );
+  const [saveFailed, setSaveFailed] = useState(false);
 
   /**
-   * Matched on `topicId`, not on a slugified topic name. The old code did
-   * `q.topic.toLowerCase().replace(/ /g, '-')`, which silently failed for
-   * "Syllogisms & Venn Diagrams" and "Error Spotting & Grammar" because the
-   * question's free-text topic did not match the topic's name.
+   * The practice attempt this session is appending to.
+   *
+   * Created by the server on the first answer and reused after that, so a
+   * sitting of ten questions is one attempt in the history rather than ten.
    */
-  const questions = useMemo(
-    () => (activeTopicId ? questionsForTopic(activeTopicId) : SAMPLE_QUESTIONS),
-    [activeTopicId],
-  );
+  const attemptId = useRef<string | null>(null);
+  const questionShownAt = useRef<number>(Date.now());
 
   const question = questions[index];
-  const activeTopic = APTITUDE_TOPICS.find((t) => t.id === activeTopicId) ?? null;
 
-  function selectTopic(topicId: string | null) {
-    setActiveTopicId(topicId);
-    resetQuestionState(0);
-  }
+  // A new topic (or filter) arrives as a new server render: reset the walk
+  // through the questions and start a fresh attempt.
+  useEffect(() => {
+    setIndex(0);
+    setSelected(null);
+    setSubmitted(false);
+    setBookmarks(Object.fromEntries(questions.map((q) => [q.id, q.isBookmarked])));
+    attemptId.current = null;
+    questionShownAt.current = Date.now();
+  }, [questions]);
 
-  function resetQuestionState(nextIndex: number) {
+  function goTo(nextIndex: number) {
     setIndex(nextIndex);
     setSelected(null);
     setSubmitted(false);
+    questionShownAt.current = Date.now();
   }
 
-  function toggleBookmark(id: string) {
-    setBookmarks((prev) =>
-      prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id],
-    );
+  async function checkAnswer() {
+    if (selected === null || !question || !activeTopic) return;
+    setSubmitted(true);
+
+    const timeSpentSeconds = Math.round((Date.now() - questionShownAt.current) / 1000);
+
+    try {
+      const res = await fetch("/api/aptitude/practice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          attemptId: attemptId.current,
+          topicId: activeTopic.id,
+          questionId: question.id,
+          selectedOption: selected,
+          timeSpentSeconds,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error("not recorded");
+      attemptId.current = data.data.attemptId;
+      setSaveFailed(false);
+    } catch {
+      // The working is already on screen and still correct — only the record
+      // failed. Say so rather than pretending the attempt was saved.
+      setSaveFailed(true);
+    }
   }
+
+  async function toggleBookmark(questionId: string) {
+    const next = !bookmarks[questionId];
+    setBookmarks((prev) => ({ ...prev, [questionId]: next }));
+    try {
+      const res = await fetch("/api/aptitude/bookmarks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId, bookmarked: next }),
+      });
+      if (!res.ok) throw new Error("request failed");
+    } catch {
+      setBookmarks((prev) => ({ ...prev, [questionId]: !next }));
+    }
+  }
+
+  const visibleTopics =
+    category === "All" ? topics : topics.filter((t) => t.category === category);
 
   return (
     <Container>
       <PageHeader
         title="Topic practice"
-        description="Answer, then see the full working — not just whether you were right."
+        description="Answer, then see the full working — not just whether you were right. Every answer is recorded against your progress."
       />
 
-      {/* Category filter */}
+      {/* Category filter — links, so the choice is in the URL and shareable. */}
       <div className="mt-6 flex flex-wrap gap-2">
-        {CATEGORIES.map((cat) => (
-          <button
+        {CATEGORY_FILTERS.map((cat) => (
+          <Link
             key={cat}
-            type="button"
-            onClick={() => {
-              setCategory(cat);
-              selectTopic(null);
-            }}
+            href={practiceRoute(undefined, cat)}
             className={cn(
-              "cursor-pointer rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+              "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
               category === cat
                 ? "border-accent bg-accent text-white"
                 : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
             )}
           >
             {cat}
-          </button>
+          </Link>
         ))}
       </div>
 
@@ -117,39 +166,53 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
         <aside>
           <div className="flex items-center justify-between px-1 pb-2.5">
             <span className="text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
-              Topics ({topics.length})
+              Topics ({visibleTopics.length})
             </span>
-            {activeTopicId && (
-              <button
-                type="button"
-                onClick={() => selectTopic(null)}
-                className="cursor-pointer text-xs font-medium text-accent hover:underline"
+            {activeTopic && (
+              <Link
+                href={practiceRoute(undefined, category)}
+                className="text-xs font-medium text-accent hover:underline"
               >
                 Clear
-              </button>
+              </Link>
             )}
           </div>
 
           <ul className="space-y-2">
-            {topics.map((topic) => {
-              const count = questionCountForTopic(topic.id);
-              const isActive = topic.id === activeTopicId;
-              const isEmpty = count === 0;
+            {visibleTopics.map((topic) => {
+              const isActive = topic.id === activeTopic?.id;
+              const isEmpty = topic.questionCount === 0;
+
+              // No questions means nothing to link to; rendered as a disabled
+              // row rather than a link that lands on an empty screen.
+              if (isEmpty) {
+                return (
+                  <li key={topic.id}>
+                    <span className="block cursor-not-allowed rounded-card border border-dashed border-line bg-surface px-4 py-3 opacity-60">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-ink">
+                          {topic.name}
+                        </span>
+                        <span className="shrink-0 text-xs text-ink-subtle">—</span>
+                      </span>
+                      <span className="mt-1 block text-xs text-ink-subtle">
+                        No questions yet
+                      </span>
+                    </span>
+                  </li>
+                );
+              }
 
               return (
                 <li key={topic.id}>
-                  <button
-                    type="button"
-                    disabled={isEmpty}
-                    onClick={() => selectTopic(topic.id)}
+                  <Link
+                    href={practiceRoute(topic.id, category)}
+                    aria-current={isActive ? "page" : undefined}
                     className={cn(
-                      "w-full rounded-card border px-4 py-3 text-left transition-colors",
-                      isEmpty
-                        ? "cursor-not-allowed border-dashed border-line bg-surface opacity-60"
-                        : "cursor-pointer",
-                      !isEmpty && isActive
+                      "block rounded-card border px-4 py-3 transition-colors",
+                      isActive
                         ? "border-accent bg-accent-soft"
-                        : !isEmpty && "border-line bg-surface hover:border-line-strong",
+                        : "border-line bg-surface hover:border-line-strong",
                     )}
                   >
                     <span className="flex items-center justify-between gap-2">
@@ -162,13 +225,13 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
                         {topic.name}
                       </span>
                       <span className="shrink-0 text-xs text-ink-subtle">
-                        {isEmpty ? "—" : count}
+                        {topic.questionCount}
                       </span>
                     </span>
                     <span className="mt-1 block text-xs text-ink-subtle">
-                      {isEmpty ? "No questions yet" : topic.category}
+                      {topic.category}
                     </span>
-                  </button>
+                  </Link>
                 </li>
               );
             })}
@@ -177,7 +240,12 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
 
         {/* Question workspace */}
         <div>
-          {!question ? (
+          {!activeTopic ? (
+            <EmptyState
+              title="Pick a topic to start"
+              description="Choose a topic from the list. The number beside each one is how many approved questions it has."
+            />
+          ) : !question ? (
             <EmptyState
               title="No questions for this topic yet"
               description="Pick another topic from the list — the ones with a number beside them have questions ready."
@@ -203,14 +271,15 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
                   <button
                     type="button"
                     onClick={() => toggleBookmark(question.id)}
+                    aria-pressed={bookmarks[question.id] ?? false}
                     aria-label={
-                      bookmarks.includes(question.id)
+                      bookmarks[question.id]
                         ? "Remove bookmark"
                         : "Bookmark this question"
                     }
                     className="cursor-pointer text-ink-subtle transition-colors hover:text-accent"
                   >
-                    {bookmarks.includes(question.id) ? (
+                    {bookmarks[question.id] ? (
                       <BookmarkCheck className="h-[18px] w-[18px] text-accent" />
                     ) : (
                       <Bookmark className="h-[18px] w-[18px]" />
@@ -301,7 +370,7 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
                         ? "Correct"
                         : `Not quite — the answer is ${String.fromCharCode(65 + question.correctOption)}`}
                     </p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+                    <p className="mt-1.5 text-sm leading-relaxed whitespace-pre-line text-ink-muted">
                       {question.explanation}
                     </p>
                   </div>
@@ -317,6 +386,14 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
                       </div>
                     </div>
                   )}
+
+                  {saveFailed && (
+                    <p role="status" className="text-sm text-ink-subtle">
+                      Couldn&rsquo;t save this answer to your progress — the working
+                      above is still right, but it won&rsquo;t count towards your
+                      accuracy.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -326,20 +403,20 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
                   variant="secondary"
                   size="sm"
                   disabled={index === 0}
-                  onClick={() => resetQuestionState(index - 1)}
+                  onClick={() => goTo(index - 1)}
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Previous
                 </Button>
 
                 {!submitted ? (
-                  <Button disabled={selected === null} onClick={() => setSubmitted(true)}>
+                  <Button disabled={selected === null} onClick={() => void checkAnswer()}>
                     Check answer
                   </Button>
                 ) : (
                   <Button
                     disabled={index >= questions.length - 1}
-                    onClick={() => resetQuestionState(index + 1)}
+                    onClick={() => goTo(index + 1)}
                   >
                     Next question
                     <ChevronRight className="h-4 w-4" />
@@ -349,8 +426,15 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
 
               {submitted && index >= questions.length - 1 && (
                 <p className="mt-4 text-center text-sm text-ink-subtle">
-                  That&rsquo;s the last question in{" "}
-                  {activeTopic ? activeTopic.name : "this set"}.
+                  That&rsquo;s the last question in {activeTopic.name}.{" "}
+                  {attemptId.current && (
+                    <Link
+                      href={reviewRoute(attemptId.current)}
+                      className="font-semibold text-accent hover:underline"
+                    >
+                      Review this session
+                    </Link>
+                  )}
                 </p>
               )}
             </Card>
@@ -359,4 +443,4 @@ export const TopicPractice: React.FC<TopicPracticeProps> = ({ initialTopicId }) 
       </div>
     </Container>
   );
-};
+}
