@@ -37,10 +37,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
-  attempts  ExamAttempt[]
-  bookmarks Bookmark[]
+  accounts          Account[]
+  sessions          Session[]
+  attempts          ExamAttempt[]
+  bookmarks         Bookmark[]
+  reviewedQuestions Question[]    @relation("QuestionReviewer")
 
   @@index([role])
 }
@@ -110,6 +111,15 @@ enum Difficulty {
   HARD
 }
 
+/// Editorial state. Nothing but APPROVED is ever served to a student — see
+/// `servableQuestions` in src/lib/aptitude.ts, which is the single filter every
+/// read goes through.
+enum QuestionStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
 /// Company packs grade themselves on their own scale, not the per-question one.
 enum PackDifficulty {
   MODERATE
@@ -137,30 +147,49 @@ model Topic {
 }
 
 model Question {
-  id          String     @id @default(cuid())
+  id           String         @id @default(cuid())
+  /// DRAFT until a human has read it. Imported questions arrive as drafts.
+  status       QuestionStatus @default(DRAFT)
+  /// Where the question came from: "curated" for questions written for NextStep,
+  /// or a dataset key such as "aqua-rat". Part of the dedupe key.
+  source       String         @default("curated")
+  /// The id this question has in its source dataset. Imports are idempotent
+  /// because of the unique index on (source, sourceId): re-running the importer
+  /// updates the same row instead of adding a copy.
+  sourceId     String?
+  /// SPDX-ish licence string for imported content, e.g. "Apache-2.0". Null for
+  /// questions written in-house. /attributions renders whatever is in here.
+  licence      String?
+  /// Who approved or rejected it, and when. An approval with no name attached is
+  /// not an editorial decision anyone can be accountable for.
+  reviewedAt   DateTime?
+  reviewedById String?
   /// Nullable because an imported draft arrives without a topic — an editor
   /// assigns one during review. Students only ever see questions that have one.
-  topicId     String?
-  category    Category
-  prompt      String
-  explanation String
-  shortcutTip String?
-  formulaUsed String?
-  difficulty  Difficulty
+  topicId      String?
+  category     Category
+  prompt       String
+  explanation  String
+  shortcutTip  String?
+  formulaUsed  String?
+  difficulty   Difficulty
   /// Companies known to ask this style of question. A plain string array rather
   /// than a Company table: nothing joins on it yet.
-  companyTags String[]   @default([])
+  companyTags  String[]       @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  topic     Topic?            @relation(fields: [topicId], references: [id], onDelete: SetNull)
-  options   Option[]
-  attempts  QuestionAttempt[]
-  bookmarks Bookmark[]
+  topic      Topic?            @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  reviewedBy User?             @relation("QuestionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  options    Option[]
+  attempts   QuestionAttempt[]
+  bookmarks  Bookmark[]
 
+  @@unique([source, sourceId])
   @@index([topicId])
   @@index([category])
+  @@index([status])
 }
 
 model Option {
