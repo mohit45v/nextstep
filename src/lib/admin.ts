@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CATEGORY_LABELS, DIFFICULTY_LABELS } from "@/lib/aptitude-labels";
 import { formatDateTime } from "@/lib/format";
 import type { QuestionStatus } from "@/generated/prisma/enums";
-import type { QueueItem, ReviewQuestion, ReviewQueue } from "@/types/admin";
+import type { ReviewQuestion, ReviewQueue } from "@/types/admin";
 
 // Re-exported so existing imports from this module keep working; the definitions
 // live in `types/admin.ts`, which has no runtime dependencies.
