@@ -1,20 +1,12 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import type { Metadata } from "next";
 import { CompanyTests } from "@/components/aptitude/CompanyTests";
-import { useAptitudeSession } from "@/components/aptitude/AptitudeSessionProvider";
-import { SCREEN_ROUTES } from "@/lib/routes";
+import { getCompanyPacks } from "@/lib/aptitude";
+import { requireProfileUser } from "@/lib/session";
 
-export default function CompanyTestsPage() {
-  const router = useRouter();
-  const { setSelectedExamPack } = useAptitudeSession();
+export const metadata: Metadata = { title: "Company tests" };
 
-  return (
-    <CompanyTests
-      onStartExam={(pack) => {
-        setSelectedExamPack(pack);
-        router.push(SCREEN_ROUTES.exam);
-      }}
-    />
-  );
+export default async function CompanyTestsPage() {
+  await requireProfileUser();
+  const packs = await getCompanyPacks();
+  return <CompanyTests packs={packs} />;
 }

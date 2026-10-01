@@ -1,16 +1,26 @@
-"use client";
-
-import { useRouter } from "next/navigation";
 import { AptitudeDashboard } from "@/components/aptitude/AptitudeDashboard";
-import { SCREEN_ROUTES, practiceRoute, type ScreenType } from "@/lib/routes";
+import { getCompanyPacks, getFormulaCards, getTopics } from "@/lib/aptitude";
+import { requireProfileUser } from "@/lib/session";
 
-export default function AptitudePage() {
-  const router = useRouter();
+/**
+ * Server component. The three queries run in parallel and the page ships no
+ * question data to the browser that the student is not looking at.
+ */
+export default async function AptitudePage() {
+  await requireProfileUser();
+
+  const [topics, packs, formulaCards] = await Promise.all([
+    getTopics(),
+    getCompanyPacks(),
+    getFormulaCards(),
+  ]);
 
   return (
     <AptitudeDashboard
-      onNavigate={(screen: ScreenType) => router.push(SCREEN_ROUTES[screen])}
-      onStartQuiz={(topicId?: string) => router.push(practiceRoute(topicId))}
+      topics={topics}
+      packCount={packs.length}
+      formulaCount={formulaCards.length}
+      questionCount={topics.reduce((sum, topic) => sum + topic.questionCount, 0)}
     />
   );
 }

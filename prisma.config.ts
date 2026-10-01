@@ -12,12 +12,18 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // `prisma db seed` and the seed step of `prisma migrate reset` run this.
+    // tsx rather than plain `node`: the generated Prisma client imports its own
+    // modules without file extensions, which Node's TypeScript support cannot
+    // resolve on its own.
+    seed: "tsx prisma/seed.ts",
   },
   datasource: {
     url: process.env["DATABASE_URL"],
     // `prisma migrate dev` needs a second, throwaway database to detect drift.
     // `npx prisma dev` provides one; hosted Postgres usually does not, in which
-    // case leave this unset and Prisma creates a temporary one itself.
-    shadowDatabaseUrl: process.env["SHADOW_DATABASE_URL"],
+    // case leave this unset and Prisma creates a temporary one itself. An empty
+    // string is not "unset" to Prisma — it errors with P1013 — so normalise it.
+    shadowDatabaseUrl: process.env["SHADOW_DATABASE_URL"] || undefined,
   },
 });

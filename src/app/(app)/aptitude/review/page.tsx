@@ -1,19 +1,12 @@
-"use client";
+import type { Metadata } from "next";
+import { AttemptHistory } from "@/components/aptitude/AttemptHistory";
+import { getAttemptHistory } from "@/lib/attempts";
+import { requireProfileUser } from "@/lib/session";
 
-import { useRouter } from "next/navigation";
-import { QuestionReview } from "@/components/aptitude/QuestionReview";
-import { useAptitudeSession } from "@/components/aptitude/AptitudeSessionProvider";
-import { SCREEN_ROUTES } from "@/lib/routes";
+export const metadata: Metadata = { title: "Your attempts" };
 
-export default function ReviewPage() {
-  const router = useRouter();
-  const { lastExamResults } = useAptitudeSession();
-
-  return (
-    <QuestionReview
-      lastExamResults={lastExamResults}
-      onRetakeExam={() => router.push(SCREEN_ROUTES.exam)}
-      onNavigateToTopics={() => router.push(SCREEN_ROUTES.practice)}
-    />
-  );
+export default async function AttemptHistoryPage() {
+  const user = await requireProfileUser();
+  const attempts = await getAttemptHistory(user.id);
+  return <AttemptHistory attempts={attempts} />;
 }

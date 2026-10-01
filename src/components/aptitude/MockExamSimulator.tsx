@@ -1,27 +1,29 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, Bookmark, ChevronLeft, ChevronRight, Timer } from "lucide-react";
-import { SAMPLE_QUESTIONS, CompanyTestPack } from "@/data/aptitudeData";
-import type { ExamResults } from "@/types";
 import { cn } from "@/lib/cn";
 import { Badge, Button, Card, Container } from "@/components/ui";
+import { SCREEN_ROUTES } from "@/lib/routes";
+import type { ExamPaper } from "@/types/aptitude";
 
-interface MockExamSimulatorProps {
-  testPack?: CompanyTestPack | null;
-  onFinishExam: (resultsPayload: ExamResults) => void;
-  onCancelExam: () => void;
-}
-
-export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
-  testPack,
-  onFinishExam,
-  onCancelExam,
-}) => {
-  const durationSeconds = (testPack?.durationMinutes || 20) * 60;
+/**
+ * The timed paper.
+ *
+ * What this component does *not* have is the answer key — `paper.questions`
+ * carries prompts and options only. It collects answers and per-question timings,
+ * posts them, and navigates to the review of the attempt the server stored. That
+ * means there is no code path here that can decide a score, which is the point:
+ * the previous version invented one (80% accuracy, 4 correct) whenever the
+ * request failed.
+ */
+export function MockExamSimulator({ paper }: { paper: ExamPaper }) {
+  const router = useRouter();
+  const questions = paper.questions;
+  const durationSeconds = paper.durationMinutes * 60;
 
   const [secondsRemaining, setSecondsRemaining] = useState(durationSeconds);
-  const [questions] = useState(SAMPLE_QUESTIONS);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [markedForReview, setMarkedForReview] = useState<Record<string, boolean>>({});
@@ -34,10 +36,10 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
   /**
    * Real per-question timing.
    *
-   * The old code sent a hardcoded `timeSpentSeconds: 45` for every question,
-   * so the "average time per question" in the results was a constant dressed
-   * up as a measurement. We now accumulate the actual dwell time and bank it
-   * whenever the student moves to a different question.
+   * The old code sent a hardcoded `timeSpentSeconds: 45` for every question, so
+   * the "average time per question" in the results was a constant dressed up as
+   * a measurement. We accumulate the actual dwell time and bank it whenever the
+   * student moves to a different question.
    */
   const timeSpent = useRef<Record<string, number>>({});
   // Set on mount rather than in the initialiser — `Date.now()` during render is
@@ -90,6 +92,7 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
 
     const submissions = questions.map((q) => ({
       questionId: q.id,
+      // -1 is the wire format for "skipped"; the server stores it as null.
       selectedOption: answers[q.id] ?? -1,
       timeSpentSeconds: timeSpent.current[q.id] ?? 0,
     }));
@@ -99,7 +102,8 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          testPackId: testPack?.id || "mock-exam-1",
+          packId: paper.packId,
+          elapsedSeconds: durationSeconds - secondsRemaining,
           submissions,
         }),
       });
@@ -107,19 +111,18 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        // Previously this branch invented a result — 80% accuracy, 4 correct,
-        // regardless of what the student actually answered. Showing a real
-        // error is the only honest option: scoring happens on the server, so
-        // if the server did not answer, there is no score.
         setSubmitError(
-          data?.error ?? "Couldn't score your test. Check your connection and try again.",
+          data?.error ??
+            "Couldn't score your test. Check your connection and try again.",
         );
         setIsSubmitting(false);
         hasAutoSubmitted.current = false;
         return;
       }
 
-      onFinishExam(data.data);
+      // The attempt is in the database now, so the review is a URL — a refresh,
+      // a bookmark or a link to a friend all still work.
+      router.push(data.data.reviewUrl);
     } catch {
       setSubmitError(
         "Couldn't reach the server to score your test. Your answers are still here — try submitting again.",
@@ -145,13 +148,15 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }, [secondsRemaining]);
 
+  const shortPaper = paper.sections.some((s) => s.drawn < s.requested);
+
   return (
     <Container>
       {/* Exam bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-5">
         <div className="min-w-0">
           <h1 className="truncate text-xl font-bold">
-            {testPack ? `${testPack.companyName} — ${testPack.testTitle}` : "Mock test"}
+            {paper.companyName} — {paper.testTitle}
           </h1>
           <p className="mt-1 text-sm text-ink-muted">
             {answeredCount} of {questions.length} answered
@@ -178,6 +183,15 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
           </Button>
         </div>
       </div>
+
+      {shortPaper && (
+        <p className="mt-4 text-xs leading-relaxed text-ink-subtle">
+          This sitting has {questions.length} of the{" "}
+          {paper.sections.reduce((sum, s) => sum + s.requested, 0)} questions the
+          real paper sets — the bank cannot fill every section yet. You are scored
+          out of what you were asked.
+        </p>
+      )}
 
       {submitError && (
         <div
@@ -340,7 +354,7 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
             variant="ghost"
             size="sm"
             className="mt-3 w-full"
-            onClick={onCancelExam}
+            onClick={() => router.push(SCREEN_ROUTES.company)}
           >
             Leave test
           </Button>
@@ -389,7 +403,7 @@ export const MockExamSimulator: React.FC<MockExamSimulatorProps> = ({
       )}
     </Container>
   );
-};
+}
 
 function LegendRow({
   className,

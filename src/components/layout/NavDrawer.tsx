@@ -11,6 +11,7 @@ import {
   Compass,
   LayoutDashboard,
   Sigma,
+  UserRound,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -25,6 +26,7 @@ const ICONS = {
   Sigma,
   ChartBar,
   Binary,
+  UserRound,
 } as const;
 
 interface NavDrawerProps {

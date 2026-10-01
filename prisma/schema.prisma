@@ -28,17 +28,19 @@ model User {
   image         String?
 
   // NextStep profile
-  role       Role     @default(STUDENT)
+  role       Role    @default(STUDENT)
   branch     String?
   gradYear   Int?
-  rollNumber String?  @unique
-  credits    Int      @default(250)
+  rollNumber String? @unique
+  credits    Int     @default(250)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  accounts Account[]
-  sessions Session[]
+  accounts  Account[]
+  sessions  Session[]
+  attempts  ExamAttempt[]
+  bookmarks Bookmark[]
 
   @@index([role])
 }
@@ -80,4 +82,232 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+/**
+ * ===========================================================================
+ * Aptitude content
+ * ---------------------------------------------------------------------------
+ * Everything below was a hardcoded array in `src/data/aptitudeData.ts`. The
+ * shapes are deliberately close to those arrays so the seed is a straight
+ * mapping, with two differences that only a database can express:
+ * An answer is a flag on an option row, not an index into a JSON array. An
+ * index can point past the end of the list; a flag cannot.
+ * A question's topic is a relation, so a topic cannot advertise questions
+ * that do not exist — the count is a query, never a stored number.
+ * ===========================================================================
+ */
+
+enum Category {
+  QUANTITATIVE
+  LOGICAL_REASONING
+  VERBAL_ABILITY
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+/// Company packs grade themselves on their own scale, not the per-question one.
+enum PackDifficulty {
+  MODERATE
+  CHALLENGING
+  HIGH
+}
+
+model Topic {
+  /// Human-readable slug ("profit-loss"), not a cuid: it appears in URLs
+  /// (/aptitude/practice?topic=profit-loss) and in the seed, so a stable,
+  /// readable id is worth more here than a generated one.
+  id          String   @id
+  name        String
+  category    Category
+  /// lucide-react icon name, resolved on the client.
+  iconName    String
+  description String
+  /// Display order within a category.
+  order       Int      @default(0)
+
+  questions Question[]
+  attempts  ExamAttempt[]
+
+  @@index([category])
+}
+
+model Question {
+  id          String     @id @default(cuid())
+  /// Nullable because an imported draft arrives without a topic — an editor
+  /// assigns one during review. Students only ever see questions that have one.
+  topicId     String?
+  category    Category
+  prompt      String
+  explanation String
+  shortcutTip String?
+  formulaUsed String?
+  difficulty  Difficulty
+  /// Companies known to ask this style of question. A plain string array rather
+  /// than a Company table: nothing joins on it yet.
+  companyTags String[]   @default([])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  topic     Topic?            @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  options   Option[]
+  attempts  QuestionAttempt[]
+  bookmarks Bookmark[]
+
+  @@index([topicId])
+  @@index([category])
+}
+
+model Option {
+  id         String  @id @default(cuid())
+  questionId String
+  /// 0-based position. Unique per question so two options cannot claim "A".
+  order      Int
+  text       String
+  isCorrect  Boolean @default(false)
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, order])
+  @@index([questionId])
+}
+
+model FormulaCard {
+  id       String   @id
+  category Category
+  /// Free text, not a Topic relation: cards exist for topics with no questions
+  /// yet ("Clocks & Angles"), and a dangling relation would be worse than a label.
+  topic    String
+  title    String
+  formula  String
+  keyRule  String
+  example  String
+  order    Int      @default(0)
+
+  @@index([category])
+}
+
+model CompanyPack {
+  id               String         @id
+  companyName      String
+  /// Brand colour for the initial tile, carried over from the seed data.
+  logoColor        String
+  testTitle        String
+  durationMinutes  Int
+  cutoffPercentage Int
+  difficulty       PackDifficulty
+  description      String
+  order            Int            @default(0)
+
+  sections CompanyPackSection[]
+  attempts ExamAttempt[]
+}
+
+model CompanyPackSection {
+  id            String   @id @default(cuid())
+  packId        String
+  name          String
+  /// How many questions the real campus paper has in this section. The exam
+  /// draws up to this many from the approved bank, so a short bank yields a
+  /// shorter paper rather than a fabricated one.
+  questionCount Int
+  /// Which part of the bank this section draws from.
+  category      Category
+  order         Int      @default(0)
+
+  pack CompanyPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@unique([packId, order])
+  @@index([packId])
+}
+
+/**
+ * ===========================================================================
+ * Attempts, progress and bookmarks
+ * ---------------------------------------------------------------------------
+ * A finished test used to live in React state and vanish on refresh. These
+ * tables are what make practice history, accuracy per topic and a shareable
+ * review link possible.
+ * Scores are stored, but they are never read from the client: the API recomputes
+ * every total from the stored answers and the option rows. The stored figures
+ * are a cache of that computation, not a claim the browser made.
+ * ===========================================================================
+ */
+
+enum AttemptMode {
+  /// A timed company paper, scored +4 / −1.
+  MOCK_EXAM
+  /// Self-paced topic practice: one question at a time, answer revealed.
+  TOPIC_PRACTICE
+}
+
+model ExamAttempt {
+  id      String      @id @default(cuid())
+  userId  String
+  mode    AttemptMode
+  /// Null for topic practice, and for a pack deleted after the attempt was sat.
+  packId  String?
+  /// Set for a topic practice attempt.
+  topicId String?
+
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+
+  /// Totals recomputed server-side at submission. Denormalised deliberately:
+  /// the history list and the analytics page would otherwise re-score every
+  /// attempt on every page load.
+  totalScore       Int
+  maxScore         Int
+  correctCount     Int
+  incorrectCount   Int
+  skippedCount     Int
+  totalTimeSeconds Int
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pack      CompanyPack?      @relation(fields: [packId], references: [id], onDelete: SetNull)
+  topic     Topic?            @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  questions QuestionAttempt[]
+
+  @@index([userId, submittedAt])
+  @@index([packId])
+  @@index([topicId])
+}
+
+model QuestionAttempt {
+  id               String  @id @default(cuid())
+  attemptId        String
+  questionId       String
+  /// Position in the paper, so the review reads in the order it was sat.
+  order            Int
+  /// 0-based option index, or null when the question was skipped. Null rather
+  /// than -1: "no answer" is absence, and a sentinel invites arithmetic on it.
+  selectedOption   Int?
+  isCorrect        Boolean
+  timeSpentSeconds Int     @default(0)
+
+  attempt  ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+}
+
+model Bookmark {
+  id         String   @id @default(cuid())
+  userId     String
+  questionId String
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  /// One bookmark per student per question — the toggle is idempotent.
+  @@unique([userId, questionId])
+  @@index([userId])
 }

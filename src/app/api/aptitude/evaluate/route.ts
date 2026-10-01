@@ -1,99 +1,69 @@
-import { NextResponse } from 'next/server';
-import { SAMPLE_QUESTIONS } from '@/data/aptitudeData';
-import { requireApiUser } from '@/lib/session';
+import { NextResponse } from "next/server";
+import { requireApiUser } from "@/lib/session";
+import { recordAttempt } from "@/lib/attempts";
+import { evaluateRequestSchema } from "@/lib/validation/aptitude";
 
-interface UserSubmission {
-  questionId: string;
-  selectedOption: number; // 0-indexed, -1 if skipped
-  timeSpentSeconds: number;
-}
-
+/**
+ * Scores a finished mock paper and stores it.
+ *
+ * What changed when this moved onto the database:
+ *
+ *  * The answer key is read from the `Option` rows, not from a TypeScript array
+ *    that also shipped to the browser. The paper the client renders no longer
+ *    contains the answers at all.
+ *  * The response is an attempt id, not a score. The review screen reads the
+ *    stored attempt, so a result survives a refresh and can be linked to.
+ */
 export async function POST(request: Request) {
   const user = await requireApiUser();
   if (user instanceof Response) return user;
 
+  let body: unknown;
   try {
-    const body = await request.json();
-    const submissions: UserSubmission[] = body.submissions || [];
-    const testPackId = body.testPackId || 'custom-practice';
-
-    let totalScore = 0;
-    let correctCount = 0;
-    let incorrectCount = 0;
-    let skippedCount = 0;
-    let totalTimeSeconds = 0;
-
-    const detailedResults = submissions.map(sub => {
-      const question = SAMPLE_QUESTIONS.find(q => q.id === sub.questionId);
-      if (!question) return null;
-
-      totalTimeSeconds += sub.timeSpentSeconds || 0;
-
-      const isSkipped = sub.selectedOption === -1;
-      const isCorrect = sub.selectedOption === question.correctOption;
-
-      if (isSkipped) {
-        skippedCount++;
-      } else if (isCorrect) {
-        correctCount++;
-        totalScore += 4; // +4 for correct
-      } else {
-        incorrectCount++;
-        totalScore -= 1; // -1 penalty
-      }
-
-      return {
-        questionId: question.id,
-        questionText: question.question,
-        options: question.options,
-        userOption: sub.selectedOption,
-        correctOption: question.correctOption,
-        isCorrect,
-        isSkipped,
-        timeSpentSeconds: sub.timeSpentSeconds,
-        explanation: question.explanation,
-        shortcutTip: question.shortcutTip,
-        formulaUsed: question.formulaUsed,
-        category: question.category,
-        topic: question.topic
-      };
-    }).filter(Boolean);
-
-    const attemptedCount = correctCount + incorrectCount;
-    const accuracyPercentage = attemptedCount > 0 ? Math.round((correctCount / attemptedCount) * 100) : 0;
-    const averageTimePerQuestion = attemptedCount > 0 ? Math.round(totalTimeSeconds / attemptedCount) : 0;
-
-    // Generate Smart Recommendations based on errors
-    const topicErrorMap: Record<string, number> = {};
-    detailedResults.forEach(res => {
-      if (res && !res.isCorrect && !res.isSkipped) {
-        topicErrorMap[res.topic] = (topicErrorMap[res.topic] || 0) + 1;
-      }
-    });
-
-    const generatedRecommendations = Object.keys(topicErrorMap).map(topic => ({
-      topic,
-      message: `You made ${topicErrorMap[topic]} error(s) in ${topic}. Review formulas and complete 5 practice questions to improve accuracy.`,
-      action: `Practice ${topic}`
-    }));
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        testPackId,
-        totalScore,
-        maxScore: submissions.length * 4,
-        correctCount,
-        incorrectCount,
-        skippedCount,
-        accuracyPercentage,
-        totalTimeSeconds,
-        averageTimePerQuestion,
-        detailedResults,
-        generatedRecommendations
-      }
-    });
+    body = await request.json();
   } catch {
-    return NextResponse.json({ success: false, error: 'Invalid submission payload' }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: "Expected a JSON body." },
+      { status: 400 },
+    );
   }
+
+  const parsed = evaluateRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "That submission isn't in the expected shape.",
+        issues: parsed.error.issues.map((i) => ({
+          path: i.path.join("."),
+          message: i.message,
+        })),
+      },
+      { status: 400 },
+    );
+  }
+
+  const { packId, topicId, submissions, elapsedSeconds } = parsed.data;
+
+  const result = await recordAttempt({
+    userId: user.id,
+    mode: packId ? "MOCK_EXAM" : "TOPIC_PRACTICE",
+    packId,
+    topicId,
+    answers: submissions,
+    // Derived from how long the client had the paper open, so the stored window
+    // matches the sitting rather than the instant of submission.
+    startedAt: elapsedSeconds
+      ? new Date(Date.now() - elapsedSeconds * 1000)
+      : undefined,
+  });
+
+  if ("error" in result) {
+    return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: { attemptId: result.attemptId, reviewUrl: `/aptitude/review/${result.attemptId}` },
+  });
 }
