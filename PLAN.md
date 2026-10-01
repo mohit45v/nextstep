@@ -94,9 +94,14 @@ Server actions vs API routes · Zod schema validation · `revalidatePath` ·
 progressive enhancement (the form must work with JS disabled).
 
 ### Done when
-- [ ] A brand-new user is forced through onboarding exactly once
-- [ ] Invalid input shows a field-level error, not a crash
-- [ ] The Navbar shows your real name and branch
+- [x] A brand-new user is forced through onboarding exactly once — `(app)/layout.tsx`
+      calls `requireProfileUser()`, so every route in the group is gated, and
+      `/onboarding` redirects to the dashboard once the profile is complete
+- [x] Invalid input shows a field-level error, not a crash — `parseProfileForm`
+      returns one message per field; a duplicate roll number (P2002) is reported
+      on the field rather than thrown
+- [x] The Navbar shows your real name and branch — read from the database in the
+      layout, not from the JWT, so it is correct immediately after onboarding
 
 ---
 
@@ -121,9 +126,13 @@ Relational modelling (one-to-many, many-to-many) · Prisma relations and
 `include` · seeding · why you never ship secrets or data in client bundles.
 
 ### Done when
-- [ ] Questions render from the database, not the TS file
-- [ ] Hitting `/api/aptitude` while signed out returns 401 JSON
-- [ ] `npx prisma db seed` rebuilds the content from scratch
+- [x] Questions render from the database, not the TS file — `src/data/aptitudeData.ts`
+      is deleted; the content now lives in `prisma/seed-data.ts`, whose only
+      consumer is the seed
+- [x] Hitting `/api/aptitude` while signed out returns 401 JSON — verified for
+      `/api/aptitude`, `/analytics`, `/evaluate`, `/practice` and `/bookmarks`
+- [x] `npx prisma db seed` rebuilds the content from scratch — idempotent upserts;
+      two consecutive runs leave the same row counts (8 / 6 / 4 / 4)
 
 ---
 
@@ -148,9 +157,14 @@ Why scoring belongs on the server · transactions (`prisma.$transaction`) ·
 dynamic route segments · aggregation with `groupBy`.
 
 ### Done when
-- [ ] Finishing an exam writes rows you can see in Studio
-- [ ] `/aptitude/review/<id>` works after a hard refresh
-- [ ] Analytics numbers change when you actually practise
+- [x] Finishing an exam writes rows you can see in Studio — `ExamAttempt` +
+      `QuestionAttempt` in one transaction, scored from the `Option` rows
+- [x] `/aptitude/review/<id>` works after a hard refresh — the review reads the
+      stored attempt, scoped to `userId`, so another student's id gives a 404
+- [x] Analytics numbers change when you actually practise — accuracy per topic is
+      a `groupBy` over your own answers; topic practice records each checked
+      answer, and re-answering a question overwrites its row rather than
+      inflating the count
 
 ---
 
@@ -192,10 +206,18 @@ quality, some wrong answers. Streaming large files instead of `JSON.parse` on
 
 ### Done when
 
-- [ ] A student only ever sees `APPROVED` questions
-- [ ] Re-running the importer creates zero duplicates
-- [ ] `/attributions` credits both datasets correctly
-- [ ] You have personally read every approved question
+- [x] A student only ever sees `APPROVED` questions — one filter,
+      `servableQuestions` in `src/lib/aptitude.ts`, spread into every read
+- [x] Re-running the importer creates zero duplicates — dedupe on a SHA-256 of the
+      normalised question text, stored as `sourceId` under the unique index on
+      `(source, sourceId)`; a second run reports 0 created / N updated
+- [x] `/attributions` credits both datasets correctly — public page generated from
+      the database, listing only sources that actually have approved questions,
+      and flagging any source with no registry entry
+- [ ] You have personally read every approved question — **yours to do.** Download
+      AQuA, `npm run import:aqua -- --file <path> --limit 500`, then work through
+      `/admin/questions`. The code cannot do this part and should not pretend to:
+      approving without reading is exactly what the draft state exists to prevent
 
 ---
 

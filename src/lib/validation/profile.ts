@@ -22,13 +22,30 @@ export const profileSchema = z.object({
     error: "Pick your branch from the list.",
   }),
 
-  gradYear: z.coerce
-    .number({ error: "Enter your graduation year, e.g. 2029." })
-    .int("Enter a year, not a decimal.")
-    .min(currentYear(), "That year has already passed — enter the year you will graduate.")
-    .max(
-      currentYear() + MAX_GRAD_YEARS_AHEAD,
-      `That is too far ahead. Use a year up to ${currentYear() + MAX_GRAD_YEARS_AHEAD}.`,
+  // Validated as text first, then coerced. A bare `z.coerce.number()` turns an
+  // empty field into 0, which fails the range check and tells a student who typed
+  // nothing that "that year has already passed".
+  gradYear: z
+    .string()
+    .trim()
+    .min(1, "Enter your graduation year, e.g. 2029.")
+    .regex(/^\d{4}$/, "Enter a four-digit year, e.g. 2029.")
+    // `transform` rather than `pipe(z.coerce.number())`: the regex above has
+    // already proved this is four digits, and a coerced schema's input type is
+    // `unknown`, which does not line up with a string pipeline.
+    .transform(Number)
+    .pipe(
+      z
+        .number()
+        .int()
+        .min(
+          currentYear(),
+          "That year has already passed — enter the year you will graduate.",
+        )
+        .max(
+          currentYear() + MAX_GRAD_YEARS_AHEAD,
+          `That is too far ahead. Use a year up to ${currentYear() + MAX_GRAD_YEARS_AHEAD}.`,
+        ),
     ),
 
   // Trimmed and upper-cased before the pattern runs, so "  tu3f2122001 " is

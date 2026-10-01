@@ -5,15 +5,28 @@ import { usePathname } from "next/navigation";
 import { ALL_NAV_ITEMS } from "./nav-items";
 
 /**
- * Longest matching nav href wins, so /aptitude/practice beats /aptitude.
+ * Routes that have a title but no drawer entry — you reach a sitting of a paper
+ * from the company list, not from the sidebar.
+ */
+const EXTRA_TITLES: Record<string, string> = {
+  "/aptitude/exam": "Mock test",
+};
+
+/**
+ * Longest matching href wins, so /aptitude/practice beats /aptitude.
  *
  * The streak counter and "Readiness: 78%" badge that used to live here are
  * gone — both were hardcoded constants presented as measurements.
  */
 function titleForPath(pathname: string): string {
-  const match = [...ALL_NAV_ITEMS]
-    .sort((a, b) => b.href.length - a.href.length)
-    .find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+  const candidates = [
+    ...ALL_NAV_ITEMS,
+    ...Object.entries(EXTRA_TITLES).map(([href, label]) => ({ href, label })),
+  ].sort((a, b) => b.href.length - a.href.length);
+
+  const match = candidates.find(
+    (item) => pathname === item.href || pathname.startsWith(`${item.href}/`),
+  );
 
   return match?.label ?? "NextStep";
 }

@@ -33,12 +33,9 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/aptitude/practice", label: "Topic practice", icon: "BookOpen" },
       { href: "/aptitude/companies", label: "Company tests", icon: "Building2" },
       { href: "/aptitude/formulas", label: "Formula sheets", icon: "Sigma" },
+      { href: "/aptitude/review", label: "Your attempts", icon: "History" },
       { href: "/aptitude/analytics", label: "Your progress", icon: "ChartBar" },
     ],
-  },
-  {
-    heading: "Aptitude history",
-    items: [{ href: "/aptitude/review", label: "Your attempts", icon: "History" }],
   },
   {
     heading: "Coding",
