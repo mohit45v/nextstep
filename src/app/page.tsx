@@ -291,10 +291,20 @@ export default async function LandingPage() {
       <footer className="border-t border-line bg-surface py-10">
         <Container className="flex flex-col items-center justify-between gap-5 sm:flex-row">
           <Logo />
-          <p className="text-center text-sm text-ink-subtle sm:text-right">
-            A student project for Terna Engineering College.
-            <br className="hidden sm:block" /> Not an official college service.
-          </p>
+          <div className="text-center text-sm text-ink-subtle sm:text-right">
+            <p>
+              A student project for Terna Engineering College.
+              <br className="hidden sm:block" /> Not an official college service.
+            </p>
+            {/* The open licences behind the question bank require attribution, and
+                attribution nobody can find is not attribution. */}
+            <Link
+              href="/attributions"
+              className="mt-2 inline-block font-medium text-ink-muted hover:text-accent hover:underline"
+            >
+              Question sources &amp; licences
+            </Link>
+          </div>
         </Container>
       </footer>
     </>

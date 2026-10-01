@@ -37,10 +37,31 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    heading: "Aptitude history",
+    items: [{ href: "/aptitude/review", label: "Your attempts", icon: "History" }],
+  },
+  {
     heading: "Coding",
     items: [{ href: "/dsa", label: "DSA problems", icon: "Binary" }],
   },
 ];
 
-/** Flat list, used for active-route matching. */
-export const ALL_NAV_ITEMS = NAV_SECTIONS.flatMap((s) => s.items);
+/**
+ * Admin-only destinations. Kept out of `NAV_SECTIONS` so a student's drawer never
+ * renders a link they would be redirected away from, and appended by
+ * `navSectionsFor` for the roles that can use them.
+ */
+export const ADMIN_SECTION: NavSection = {
+  heading: "Editorial",
+  items: [
+    { href: "/admin/questions", label: "Question review", icon: "ClipboardCheck" },
+  ],
+};
+
+/** The drawer for one role. */
+export function navSectionsFor(isAdmin: boolean): NavSection[] {
+  return isAdmin ? [...NAV_SECTIONS, ADMIN_SECTION] : NAV_SECTIONS;
+}
+
+/** Flat list, used for active-route matching — every route, regardless of role. */
+export const ALL_NAV_ITEMS = [...NAV_SECTIONS, ADMIN_SECTION].flatMap((s) => s.items);

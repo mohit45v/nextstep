@@ -8,7 +8,9 @@ import {
   Binary,
   Building2,
   ChartBar,
+  ClipboardCheck,
   Compass,
+  History,
   LayoutDashboard,
   Sigma,
   UserRound,
@@ -16,7 +18,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Logo } from "@/components/ui/Logo";
-import { NAV_SECTIONS } from "./nav-items";
+import { navSectionsFor } from "./nav-items";
 
 const ICONS = {
   LayoutDashboard,
@@ -27,15 +29,20 @@ const ICONS = {
   ChartBar,
   Binary,
   UserRound,
+  History,
+  ClipboardCheck,
 } as const;
 
 interface NavDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Adds the editorial section. Decided on the server from the session role. */
+  isAdmin?: boolean;
 }
 
-export function NavDrawer({ isOpen, onClose }: NavDrawerProps) {
+export function NavDrawer({ isOpen, onClose, isAdmin = false }: NavDrawerProps) {
   const pathname = usePathname();
+  const sections = navSectionsFor(isAdmin);
 
   // Escape closes the drawer, and body scroll is locked while the mobile
   // overlay is covering the page.
@@ -92,7 +99,7 @@ export function NavDrawer({ isOpen, onClose }: NavDrawerProps) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-5">
-          {NAV_SECTIONS.map((section) => (
+          {sections.map((section) => (
             <div key={section.heading} className="mb-6 last:mb-0">
               <p className="px-3 pb-2 text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
                 {section.heading}

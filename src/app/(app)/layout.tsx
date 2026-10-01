@@ -23,6 +23,7 @@ export default async function AppLayout({
 
   return (
     <AppShell
+      isAdmin={user.role === "ADMIN"}
       accountSlot={
         <AccountMenu
           name={user.name ?? user.email}

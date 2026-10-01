@@ -11,8 +11,14 @@
  */
 export const ALLOWED_EMAIL_DOMAIN = "ternaengg.ac.in";
 
-/** Routes reachable without a session. Everything else requires sign-in. */
-export const PUBLIC_ROUTES = ["/", "/login", "/auth/error"] as const;
+/**
+ * Routes reachable without a session. Everything else requires sign-in.
+ *
+ * `/attributions` is public because it has to be: the open licences behind the
+ * question bank require attribution, and attribution behind a login is not
+ * attribution.
+ */
+export const PUBLIC_ROUTES = ["/", "/login", "/auth/error", "/attributions"] as const;
 
 /** Where a user lands after a successful sign-in. */
 export const DEFAULT_LOGIN_REDIRECT = "/dashboard";

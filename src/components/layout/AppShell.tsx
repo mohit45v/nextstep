@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Navbar } from "./Navbar";
 import { NavDrawer } from "./NavDrawer";
 
@@ -19,15 +20,22 @@ import { NavDrawer } from "./NavDrawer";
 export function AppShell({
   children,
   accountSlot,
+  isAdmin = false,
 }: {
   children: React.ReactNode;
   accountSlot?: React.ReactNode;
+  /** Role is read on the server and passed down — the drawer never guesses. */
+  isAdmin?: boolean;
 }) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   return (
     <>
-      <NavDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
+      <NavDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        isAdmin={isAdmin}
+      />
 
       {/* Drawer is fixed at 18rem and always visible from `lg` up. */}
       <div className="flex min-h-screen flex-col lg:pl-72">
@@ -41,7 +49,10 @@ export function AppShell({
         <footer className="border-t border-line px-4 py-6 sm:px-6">
           <p className="text-xs text-ink-subtle">
             NextStep · A student project for Terna Engineering College. Not an
-            official college service.
+            official college service.{" "}
+            <Link href="/attributions" className="hover:text-accent hover:underline">
+              Question sources &amp; licences
+            </Link>
           </p>
         </footer>
       </div>

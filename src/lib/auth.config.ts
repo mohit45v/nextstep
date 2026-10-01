@@ -1,6 +1,10 @@
 import type { NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import { ALLOWED_EMAIL_DOMAIN, DEFAULT_LOGIN_REDIRECT } from "./constants";
+import {
+  ALLOWED_EMAIL_DOMAIN,
+  DEFAULT_LOGIN_REDIRECT,
+  PUBLIC_ROUTES,
+} from "./constants";
 
 /**
  * Edge-safe half of the Auth.js config.
@@ -101,8 +105,9 @@ export const authConfig = {
         return true;
       }
 
-      // Landing page stays public.
-      if (pathname === "/") return true;
+      // The landing page and the attribution page stay public — PUBLIC_ROUTES is
+      // the single list, so adding one there is enough.
+      if ((PUBLIC_ROUTES as readonly string[]).includes(pathname)) return true;
 
       // Everything else requires a session; Auth.js redirects to `pages.signIn`
       // with a callbackUrl when this returns false.
