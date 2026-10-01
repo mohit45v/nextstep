@@ -9,6 +9,7 @@ import {
 } from "@/lib/aptitude-labels";
 import type {
   CompanyPackSummary,
+  DemoQuestion,
   ExamPaper,
   ExamQuestion,
   FormulaCardView,
@@ -123,6 +124,33 @@ export async function getPracticeQuestions(
     isBookmarked: bookmarked.has(question.id),
   }));
 }
+
+/**
+ * A handful of questions for the public landing page's demo loop.
+ *
+ * The only question query in the app that runs without a session, so it is
+ * deliberately narrow: a fixed, small number of rows, oldest first so the result
+ * is stable and cacheable, and nothing user-specific. Everything it returns is
+ * already public in the sense that it is the content the college is advertising.
+ */
+export const getDemoQuestions = cache(async (limit = 3): Promise<DemoQuestion[]> => {
+  const questions = await prisma.question.findMany({
+    where: servableQuestions,
+    orderBy: { createdAt: "asc" },
+    take: limit,
+    include: { options: OPTIONS_IN_ORDER, topic: { select: { name: true } } },
+  });
+
+  return questions.map((question) => ({
+    id: question.id,
+    question: question.prompt,
+    options: question.options.map((o) => o.text),
+    correctOption: question.options.findIndex((o) => o.isCorrect),
+    explanation: question.explanation,
+    difficulty: DIFFICULTY_LABELS[question.difficulty],
+    topic: question.topic?.name ?? CATEGORY_LABELS[question.category],
+  }));
+});
 
 /* ---------------------------------------------------------------------------
    Formula cards

@@ -35,6 +35,10 @@ interface TopicPracticeProps {
 /**
  * Self-paced practice: one question, answer, full working.
  *
+ * Switching topic or category is a navigation, and the page gives this component
+ * a `key` of the topic id — so a new topic remounts it with fresh state instead
+ * of resetting six pieces of state from an effect.
+ *
  * Two things moved out of this component when the bank went into Postgres.
  *
  *  * **Which questions to show.** The topic and the category filter are in the
@@ -65,22 +69,18 @@ export function TopicPractice({
    *
    * Created by the server on the first answer and reused after that, so a
    * sitting of ten questions is one attempt in the history rather than ten.
+   * State, not a ref: the "review this session" link at the end renders from it.
    */
-  const attemptId = useRef<string | null>(null);
-  const questionShownAt = useRef<number>(Date.now());
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+
+  // Set on mount rather than in the initialiser — `Date.now()` during render is
+  // impure and would give a different answer on every re-render.
+  const questionShownAt = useRef<number>(0);
+  useEffect(() => {
+    questionShownAt.current = Date.now();
+  }, []);
 
   const question = questions[index];
-
-  // A new topic (or filter) arrives as a new server render: reset the walk
-  // through the questions and start a fresh attempt.
-  useEffect(() => {
-    setIndex(0);
-    setSelected(null);
-    setSubmitted(false);
-    setBookmarks(Object.fromEntries(questions.map((q) => [q.id, q.isBookmarked])));
-    attemptId.current = null;
-    questionShownAt.current = Date.now();
-  }, [questions]);
 
   function goTo(nextIndex: number) {
     setIndex(nextIndex);
@@ -93,14 +93,17 @@ export function TopicPractice({
     if (selected === null || !question || !activeTopic) return;
     setSubmitted(true);
 
-    const timeSpentSeconds = Math.round((Date.now() - questionShownAt.current) / 1000);
+    const timeSpentSeconds =
+      questionShownAt.current === 0
+        ? 0
+        : Math.round((Date.now() - questionShownAt.current) / 1000);
 
     try {
       const res = await fetch("/api/aptitude/practice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          attemptId: attemptId.current,
+          attemptId,
           topicId: activeTopic.id,
           questionId: question.id,
           selectedOption: selected,
@@ -109,7 +112,7 @@ export function TopicPractice({
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error("not recorded");
-      attemptId.current = data.data.attemptId;
+      setAttemptId(data.data.attemptId);
       setSaveFailed(false);
     } catch {
       // The working is already on screen and still correct — only the record
@@ -427,9 +430,9 @@ export function TopicPractice({
               {submitted && index >= questions.length - 1 && (
                 <p className="mt-4 text-center text-sm text-ink-subtle">
                   That&rsquo;s the last question in {activeTopic.name}.{" "}
-                  {attemptId.current && (
+                  {attemptId && (
                     <Link
-                      href={reviewRoute(attemptId.current)}
+                      href={reviewRoute(attemptId)}
                       className="font-semibold text-accent hover:underline"
                     >
                       Review this session

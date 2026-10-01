@@ -40,6 +40,19 @@ export interface PracticeQuestion {
   isBookmarked: boolean;
 }
 
+/**
+ * The three questions the public landing page animates through.
+ *
+ * It carries the answer and the explanation because that loop is the product
+ * demo — the payoff is seeing the working. It is also the only question data
+ * served without a session, which is why it is a named, narrow type rather than
+ * a reused one.
+ */
+export type DemoQuestion = Pick<
+  PracticeQuestion,
+  "id" | "question" | "options" | "correctOption" | "explanation" | "difficulty" | "topic"
+>;
+
 /** A question as it appears during a timed test: no answer, no explanation. */
 export interface ExamQuestion {
   id: string;

@@ -3,11 +3,14 @@
 import { useState } from "react";
 import { Navbar } from "./Navbar";
 import { NavDrawer } from "./NavDrawer";
-import { AptitudeSessionProvider } from "@/components/aptitude/AptitudeSessionProvider";
 
 /**
- * Client half of the protected layout: owns the drawer open/close state and
- * wraps every page in the aptitude session provider.
+ * Client half of the protected layout: owns the drawer open/close state.
+ *
+ * It used to also host an `AptitudeSessionProvider` holding the in-flight exam
+ * and the last results in memory. Both now live in the database and are reached
+ * by URL (/aptitude/exam/[packId], /aptitude/review/[attemptId]), so the provider
+ * is gone — a refresh no longer loses a paper.
  *
  * `accountSlot` is rendered on the server (it contains the sign-out server
  * action) and passed through as a prop, which keeps this component client-side
@@ -23,7 +26,7 @@ export function AppShell({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
   return (
-    <AptitudeSessionProvider>
+    <>
       <NavDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
 
       {/* Drawer is fixed at 18rem and always visible from `lg` up. */}
@@ -42,6 +45,6 @@ export function AppShell({
           </p>
         </footer>
       </div>
-    </AptitudeSessionProvider>
+    </>
   );
 }

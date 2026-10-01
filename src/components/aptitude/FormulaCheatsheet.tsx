@@ -2,20 +2,27 @@
 
 import React, { useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { FORMULA_CARDS } from "@/data/aptitudeData";
 import { cn } from "@/lib/cn";
 import { Badge, Card, Container, EmptyState, PageHeader } from "@/components/ui";
+import { CATEGORY_FILTERS, type CategoryFilter } from "@/lib/aptitude-labels";
+import type { FormulaCardView } from "@/types/aptitude";
 
-const CATEGORIES = ["All", "Quantitative", "Logical Reasoning", "Verbal Ability"] as const;
-type Category = (typeof CATEGORIES)[number];
-
-export const FormulaCheatsheet: React.FC = () => {
-  const [category, setCategory] = useState<Category>("All");
+/**
+ * The cards come from the database now, passed in by the page.
+ *
+ * Search and the category chips stay client-side: the whole set is a few dozen
+ * rows, so filtering in the browser is instant and a round-trip per keystroke
+ * would be slower and worse.
+ */
+export const FormulaCheatsheet: React.FC<{ cards: FormulaCardView[] }> = ({
+  cards: allCards,
+}) => {
+  const [category, setCategory] = useState<CategoryFilter>("All");
   const [query, setQuery] = useState("");
 
   const cards = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return FORMULA_CARDS.filter((card) => {
+    return allCards.filter((card) => {
       if (category !== "All" && card.category !== category) return false;
       if (!term) return true;
       return (
@@ -24,7 +31,7 @@ export const FormulaCheatsheet: React.FC = () => {
         card.formula.toLowerCase().includes(term)
       );
     });
-  }, [category, query]);
+  }, [allCards, category, query]);
 
   return (
     <Container>
@@ -35,7 +42,7 @@ export const FormulaCheatsheet: React.FC = () => {
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map((cat) => (
+          {CATEGORY_FILTERS.map((cat) => (
             <button
               key={cat}
               type="button"

@@ -11,6 +11,7 @@ import {
   Timer,
 } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { getDemoQuestions } from "@/lib/aptitude";
 import { ALLOWED_EMAIL_DOMAIN, DEFAULT_LOGIN_REDIRECT } from "@/lib/constants";
 import { buttonStyles, Container } from "@/components/ui";
 import { Logo } from "@/components/ui/Logo";
@@ -28,6 +29,9 @@ import { Reveal } from "@/components/landing/Reveal";
 export default async function LandingPage() {
   const session = await auth();
   if (session?.user) redirect(DEFAULT_LOGIN_REDIRECT);
+
+  // Read after the redirect, so a signed-in visitor never pays for the query.
+  const demoQuestions = await getDemoQuestions();
 
   return (
     <>
@@ -129,7 +133,7 @@ export default async function LandingPage() {
 
               <Reveal delay={200} className="lg:pl-4">
                 <div className="motion-safe:animate-float-slow">
-                  <HeroPreview />
+                  <HeroPreview questions={demoQuestions} />
                 </div>
               </Reveal>
             </div>

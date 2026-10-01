@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { Check, X } from "lucide-react";
-import { SAMPLE_QUESTIONS } from "@/data/aptitudeData";
 import { cn } from "@/lib/cn";
 import { usePrefersReducedMotion } from "@/hooks/useInView";
+import type { DemoQuestion } from "@/types/aptitude";
 
 /**
  * A looping demo of the real practice flow: question → pick an option →
  * reveal → explanation.
  *
- * The questions come from the actual bank rather than being written for the
- * marketing page, so this can never advertise something the app doesn't do.
- * One of the three deliberately picks a wrong answer — the explanation is the
- * point of the product, and you only see its value after getting one wrong.
+ * The questions are read from the live question bank by the page and passed in,
+ * so this can never advertise content the app does not have. Every second demo
+ * deliberately picks a wrong answer — the explanation is the point of the
+ * product, and you only see its value after getting one wrong.
  */
 
 const PHASES = {
@@ -24,17 +24,23 @@ const PHASES = {
 
 type Phase = keyof typeof PHASES;
 
-/** `pick` is the option index the demo chooses — deliberately wrong on one. */
-const DEMO = [
-  { question: SAMPLE_QUESTIONS[0], pick: SAMPLE_QUESTIONS[0].correctOption },
-  { question: SAMPLE_QUESTIONS[1], pick: (SAMPLE_QUESTIONS[1].correctOption + 1) % 4 },
-  { question: SAMPLE_QUESTIONS[2], pick: SAMPLE_QUESTIONS[2].correctOption },
-];
-
-export function HeroPreview() {
+export function HeroPreview({ questions }: { questions: DemoQuestion[] }) {
   const reducedMotion = usePrefersReducedMotion();
   const [index, setIndex] = useState(0);
   const [tickedPhase, setTickedPhase] = useState<Phase>("reading");
+
+  /**
+   * Every other question is answered wrongly on purpose, so the loop shows both
+   * outcomes. Derived from the incoming list rather than hardcoded indices,
+   * because the bank decides how many questions there are.
+   */
+  const demo = questions.map((question, i) => ({
+    question,
+    pick:
+      i % 2 === 1
+        ? (question.correctOption + 1) % Math.max(question.options.length, 1)
+        : question.correctOption,
+  }));
 
   /**
    * Derived, not stored. Users who asked for less motion get the first question
@@ -45,22 +51,27 @@ export function HeroPreview() {
   const phase: Phase = reducedMotion ? "revealed" : tickedPhase;
 
   useEffect(() => {
-    if (reducedMotion) return;
+    if (reducedMotion || demo.length === 0) return;
 
     const next: Record<Phase, () => void> = {
       reading: () => setTickedPhase("picking"),
       picking: () => setTickedPhase("revealed"),
       revealed: () => {
-        setIndex((i) => (i + 1) % DEMO.length);
+        setIndex((i) => (i + 1) % demo.length);
         setTickedPhase("reading");
       },
     };
 
     const timer = setTimeout(next[phase], PHASES[phase]);
     return () => clearTimeout(timer);
-  }, [phase, reducedMotion]);
+  }, [phase, reducedMotion, demo.length]);
 
-  const { question, pick } = DEMO[index];
+  // An empty question bank is a legitimate state on a fresh install. Showing a
+  // written-for-marketing question instead would be exactly the kind of fiction
+  // the rest of the app had removed.
+  if (demo.length === 0) return <EmptyPreview />;
+
+  const { question, pick } = demo[index % demo.length];
   const isRevealed = phase === "revealed";
   const isPicking = phase === "picking" || isRevealed;
   const gotItRight = pick === question.correctOption;
@@ -86,7 +97,7 @@ export function HeroPreview() {
             {question.topic}
             {/* Progress dots */}
             <span className="flex gap-1">
-              {DEMO.map((_, i) => (
+              {demo.map((_, i) => (
                 <span
                   key={i}
                   className={cn(
@@ -196,6 +207,19 @@ export function HeroPreview() {
         </p>
         <p className="mt-0.5 text-sm font-bold text-ink">Worked explanation</p>
       </div>
+    </div>
+  );
+}
+
+/** Shown before any question has been seeded. */
+function EmptyPreview() {
+  return (
+    <div className="rounded-card border border-line border-dashed bg-surface p-8 text-center">
+      <p className="text-sm font-semibold text-ink">Worked explanations</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+        Every question in NextStep comes with the full method, not just the
+        answer. Sign in to start practising.
+      </p>
     </div>
   );
 }

@@ -32,6 +32,10 @@ export default async function PracticePage({
 
   return (
     <TopicPractice
+      // Remounts the practice panel when the topic changes, which resets the
+      // question index, the selected option and the session's attempt without an
+      // effect that writes state.
+      key={activeTopic?.id ?? "no-topic"}
       topics={topics}
       activeTopic={activeTopic}
       questions={questions}

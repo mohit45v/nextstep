@@ -1,15 +1,18 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import type { Metadata } from "next";
 import { ProgressAnalytics } from "@/components/aptitude/ProgressAnalytics";
-import { practiceRoute } from "@/lib/routes";
+import { getTopics } from "@/lib/aptitude";
+import { getProgressSummary } from "@/lib/attempts";
+import { requireProfileUser } from "@/lib/session";
 
-export default function AnalyticsPage() {
-  const router = useRouter();
+export const metadata: Metadata = { title: "Your progress" };
 
-  return (
-    <ProgressAnalytics
-      onNavigateToPractice={(topicId) => router.push(practiceRoute(topicId))}
-    />
-  );
+export default async function AnalyticsPage() {
+  const user = await requireProfileUser();
+
+  const [progress, topics] = await Promise.all([
+    getProgressSummary(user.id),
+    getTopics(),
+  ]);
+
+  return <ProgressAnalytics progress={progress} topics={topics} />;
 }
