@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { CATEGORY_LABELS, DIFFICULTY_LABELS } from "@/lib/aptitude-labels";
 import { formatDateTime } from "@/lib/format";
-import type { CategoryLabel, DifficultyLabel } from "@/lib/aptitude-labels";
 import type { QuestionStatus } from "@/generated/prisma/enums";
+import type { QueueItem, ReviewQuestion, ReviewQueue } from "@/types/admin";
+
+// Re-exported so existing imports from this module keep working; the definitions
+// live in `types/admin.ts`, which has no runtime dependencies.
+export type { QueueItem, ReviewQuestion, ReviewQueue } from "@/types/admin";
 
 /**
  * Queries for the editorial side of the question bank.
@@ -13,32 +17,8 @@ import type { QuestionStatus } from "@/generated/prisma/enums";
  * route that has already passed `requireRole("ADMIN")`.
  */
 
+/** Drafts per page in the review queue. */
 export const REVIEW_PAGE_SIZE = 20;
-
-export interface QueueItem {
-  id: string;
-  status: QuestionStatus;
-  source: string;
-  licence: string | null;
-  prompt: string;
-  category: CategoryLabel;
-  difficulty: DifficultyLabel;
-  topicName: string | null;
-  optionCount: number;
-  /** True when no option is flagged correct — a draft that cannot be approved. */
-  missingAnswer: boolean;
-  reviewedAtLabel: string | null;
-  reviewedByName: string | null;
-}
-
-export interface ReviewQueue {
-  items: QueueItem[];
-  total: number;
-  page: number;
-  pageCount: number;
-  counts: Record<QuestionStatus, number>;
-  sources: { source: string; count: number }[];
-}
 
 export async function getReviewQueue({
   status = "DRAFT",
@@ -105,29 +85,6 @@ export async function getReviewQueue({
       .map((row) => ({ source: row.source, count: row._count._all }))
       .sort((a, b) => b.count - a.count),
   };
-}
-
-export interface ReviewQuestion {
-  id: string;
-  status: QuestionStatus;
-  source: string;
-  sourceId: string | null;
-  licence: string | null;
-  prompt: string;
-  explanation: string;
-  shortcutTip: string | null;
-  formulaUsed: string | null
-  category: string;
-  difficulty: string;
-  topicId: string | null;
-  companyTags: string[];
-  options: { text: string; isCorrect: boolean }[];
-  correctOption: number;
-  createdAtLabel: string;
-  reviewedAtLabel: string | null;
-  reviewedByName: string | null;
-  /** Whether a student has ever been served this question. */
-  attemptCount: number;
 }
 
 /** One question, in full, for the edit form. */

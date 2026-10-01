@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { Button, Card } from "@/components/ui";
 import { CATEGORY_BY_LABEL, DIFFICULTY_BY_LABEL } from "@/lib/aptitude-labels";
 import type { QuestionFormState } from "@/lib/validation/question";
-import type { ReviewQuestion } from "@/lib/admin";
+import type { ReviewQuestion } from "@/types/admin";
 import type { TopicSummary } from "@/types/aptitude";
 
 type ReviewAction = (
