@@ -4,6 +4,7 @@ import { DIFFICULTY_LABELS } from "@/lib/aptitude-labels";
 import {
   DSA_BRANCH_BY_LABEL,
   DSA_BRANCH_LABELS,
+  type CodeforcesTag,
   type DsaBranchFilter,
 } from "@/lib/dsa-labels";
 import type { DsaProblemView, DsaTopicSummary, LiveProblem } from "@/types/dsa";
@@ -138,22 +139,6 @@ export const getDsaProgress = cache(
 /* ---------------------------------------------------------------------------
    Codeforces
    --------------------------------------------------------------------------- */
-
-/** Tags offered in the live feed. A fixed list — the UI must not pass anything through. */
-export const CODEFORCES_TAGS = [
-  { tag: "dp", label: "Dynamic Programming" },
-  { tag: "graphs", label: "Graphs" },
-  { tag: "trees", label: "Trees" },
-  { tag: "math", label: "Math" },
-  { tag: "greedy", label: "Greedy" },
-  { tag: "shortest paths", label: "Shortest Paths" },
-] as const;
-
-export type CodeforcesTag = (typeof CODEFORCES_TAGS)[number]["tag"];
-
-export function isCodeforcesTag(value: string): value is CodeforcesTag {
-  return CODEFORCES_TAGS.some((t) => t.tag === value);
-}
 
 interface CodeforcesApiProblem {
   contestId?: number;

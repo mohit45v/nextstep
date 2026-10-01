@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import DSAPage from "@/components/dsa/DSAPage";
-import { getDsaProblems, getDsaTopics, isCodeforcesTag } from "@/lib/dsa";
-import { defaultBranchForProgramme, toDsaBranchFilter } from "@/lib/dsa-labels";
+import { getDsaProblems, getDsaTopics } from "@/lib/dsa";
+import {
+  defaultBranchForProgramme,
+  isCodeforcesTag,
+  toDsaBranchFilter,
+} from "@/lib/dsa-labels";
 import { requireProfileUser } from "@/lib/session";
 
 export const metadata: Metadata = {

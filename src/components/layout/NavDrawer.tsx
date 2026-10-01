@@ -13,6 +13,7 @@ import {
   History,
   LayoutDashboard,
   Sigma,
+  Terminal,
   UserRound,
   X,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const ICONS = {
   UserRound,
   History,
   ClipboardCheck,
+  Terminal,
 } as const;
 
 interface NavDrawerProps {

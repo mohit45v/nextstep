@@ -1,0 +1,57 @@
+# A Judge0-compatible code runner for local development.
+#
+#   docker compose up -d
+#   # then in .env.local:
+#   CODE_RUNNER_URL="http://localhost:2358"
+#
+# This is the sandbox the playground talks to. It is a separate service on
+# purpose: executing a student's code inside the Next.js process would mean one
+# infinite loop takes the whole app down, and one `os.system` call owns the host.
+#
+# Judge0 needs privileged containers (it uses cgroups and namespaces directly to
+# isolate each submission), which is also why it cannot run on Vercel — the
+# playground works locally and on any host where you control Docker.
+services:
+  server:
+    image: judge0/judge0:1.13.1
+    # Judge0 reads its configuration from judge0.conf; the defaults are fine for
+    # local use. Set AUTHN_HEADER/AUTHZ tokens there before exposing this to a
+    # network, and put the same value in CODE_RUNNER_TOKEN.
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    ports:
+      - "2358:2358"
+    privileged: true
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  workers:
+    image: judge0/judge0:1.13.1
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    privileged: true
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: judge0
+      POSTGRES_PASSWORD: judge0
+      POSTGRES_DB: judge0
+    volumes:
+      - judge0-db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no", "--requirepass", "judge0"]
+    restart: unless-stopped
+
+volumes:
+  judge0-db:

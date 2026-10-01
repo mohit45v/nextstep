@@ -39,7 +39,10 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     heading: "Coding",
-    items: [{ href: "/dsa", label: "DSA problems", icon: "Binary" }],
+    items: [
+      { href: "/dsa", label: "DSA problems", icon: "Binary" },
+      { href: "/playground", label: "Playground", icon: "Terminal" },
+    ],
   },
 ];
 

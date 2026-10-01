@@ -72,3 +72,31 @@ export function defaultBranchForProgramme(
   if (programme.includes("civil")) return "Civil";
   return "All";
 }
+
+/* ---------------------------------------------------------------------------
+   Codeforces
+   --------------------------------------------------------------------------- */
+
+/**
+ * The tags the live feed offers.
+ *
+ * It lives here, beside the other label tables, rather than in `lib/dsa.ts`:
+ * that module imports Prisma, and the DSA screen is a client component. A client
+ * import of anything Prisma-adjacent pulls `pg` — and therefore `node:fs` — into
+ * the browser bundle, which fails the build. Keeping plain data in a
+ * dependency-free module is what keeps that boundary honest.
+ */
+export const CODEFORCES_TAGS = [
+  { tag: "dp", label: "Dynamic Programming" },
+  { tag: "graphs", label: "Graphs" },
+  { tag: "trees", label: "Trees" },
+  { tag: "math", label: "Math" },
+  { tag: "greedy", label: "Greedy" },
+  { tag: "shortest paths", label: "Shortest Paths" },
+] as const;
+
+export type CodeforcesTag = (typeof CODEFORCES_TAGS)[number]["tag"];
+
+export function isCodeforcesTag(value: string): value is CodeforcesTag {
+  return CODEFORCES_TAGS.some((t) => t.tag === value);
+}

@@ -13,8 +13,11 @@ import {
   EmptyState,
   PageHeader,
 } from "@/components/ui";
-import { CODEFORCES_TAGS } from "@/lib/dsa";
-import { DSA_BRANCH_FILTERS, type DsaBranchFilter } from "@/lib/dsa-labels";
+import {
+  CODEFORCES_TAGS,
+  DSA_BRANCH_FILTERS,
+  type DsaBranchFilter,
+} from "@/lib/dsa-labels";
 import type { DsaProblemView, DsaTopicSummary, LiveProblem } from "@/types/dsa";
 
 interface DSAPageProps {

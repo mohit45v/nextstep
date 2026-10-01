@@ -6,6 +6,7 @@ import {
 } from "@/lib/aptitude-labels";
 import { MARKS_CORRECT, MARKS_INCORRECT } from "@/lib/constants";
 import { formatDateTime } from "@/lib/format";
+import type { Category } from "@/generated/prisma/enums";
 import type {
   AttemptMode,
   AttemptRecommendation,
@@ -78,13 +79,25 @@ export async function recordAttempt({
 
   const byId = new Map(questions.map((q) => [q.id, q]));
 
+  // One row per question, whatever the client sent. `QuestionAttempt` is unique
+  // on (attemptId, questionId), so a payload naming the same question twice —
+  // a retried merge, a bug in a future client, or someone poking at the API —
+  // used to fail the whole transaction with a constraint error instead of
+  // scoring the paper. First occurrence wins, which is the order it was sat in.
+  const seen = new Set<string>();
+  const uniqueAnswers = answers.filter((answer) => {
+    if (seen.has(answer.questionId)) return false;
+    seen.add(answer.questionId);
+    return true;
+  });
+
   let totalScore = 0;
   let correctCount = 0;
   let incorrectCount = 0;
   let skippedCount = 0;
   let totalTimeSeconds = 0;
 
-  const rows = answers.flatMap((answer, index) => {
+  const rows = uniqueAnswers.flatMap((answer, index) => {
     const question = byId.get(answer.questionId);
     if (!question) return [];
 
@@ -474,77 +487,80 @@ export async function getAttemptReview(
  * decision, not a wrong answer.
  */
 export async function getProgressSummary(userId: string): Promise<ProgressSummary> {
-  const [attemptTotals, examCount, answered, recentAttempts] = await Promise.all([
-    prisma.examAttempt.aggregate({
-      where: { userId },
-      _count: { _all: true },
-      _sum: {
-        correctCount: true,
-        incorrectCount: true,
-        skippedCount: true,
-        totalTimeSeconds: true,
-      },
-    }),
-    prisma.examAttempt.count({ where: { userId, mode: "MOCK_EXAM" } }),
-    // One row per answered question, with its topic — the raw material for both
-    // the overall figure and the per-topic breakdown.
-    prisma.questionAttempt.findMany({
-      where: { attempt: { userId }, selectedOption: { not: null } },
-      select: {
-        isCorrect: true,
-        question: {
-          select: {
-            topicId: true,
-            category: true,
-            topic: { select: { name: true, category: true } },
-          },
-        },
-      },
-    }),
-    getAttemptHistory(userId, 5),
-  ]);
+  const [attemptTotals, examCount, overall, byTopicRows, recentAttempts] =
+    await Promise.all([
+      prisma.examAttempt.aggregate({
+        where: { userId },
+        _count: { _all: true },
+        _sum: { skippedCount: true, totalTimeSeconds: true },
+      }),
+      prisma.examAttempt.count({ where: { userId, mode: "MOCK_EXAM" } }),
+      // Overall totals are counted independently of the per-topic breakdown:
+      // a question whose topic was removed after it was answered still counts
+      // towards "questions answered", and deriving the total by summing the
+      // topic rows would quietly drop it.
+      prisma.questionAttempt.groupBy({
+        by: ["isCorrect"],
+        where: { attempt: { userId }, selectedOption: { not: null } },
+        _count: { _all: true },
+      }),
+      // Per-topic accuracy as one grouped join, computed by Postgres.
+      //
+      // This used to pull every answered QuestionAttempt row into Node and tally
+      // them in a loop — fine for a demo, linear in a student's whole history
+      // once they have been practising for a term. The database already has the
+      // index; counting is its job.
+      prisma.$queryRaw<
+        { topicId: string; topic: string; category: Category; attempted: bigint; correct: bigint }[]
+      >`
+        SELECT t."id"       AS "topicId",
+               t."name"     AS "topic",
+               t."category" AS "category",
+               COUNT(*)                                        AS "attempted",
+               COUNT(*) FILTER (WHERE qa."isCorrect")           AS "correct"
+          FROM "QuestionAttempt" qa
+          JOIN "ExamAttempt"     a ON a."id" = qa."attemptId"
+          JOIN "Question"        q ON q."id" = qa."questionId"
+          JOIN "Topic"           t ON t."id" = q."topicId"
+         WHERE a."userId" = ${userId}
+           AND qa."selectedOption" IS NOT NULL
+         GROUP BY t."id", t."name", t."category"
+      `,
+      getAttemptHistory(userId, 5),
+    ]);
 
-  // Accuracy is derived once the tallies are complete, so the accumulator
-  // deliberately has no `accuracy` field to go stale.
-  type TopicTally = Omit<TopicAccuracy, "accuracy">;
-  const perTopic = new Map<string, TopicTally>();
-  for (const row of answered) {
-    const topicId = row.question.topicId;
-    if (!topicId || !row.question.topic) continue;
-
-    const existing = perTopic.get(topicId);
-    if (existing) {
-      existing.attempted += 1;
-      existing.correct += row.isCorrect ? 1 : 0;
-    } else {
-      perTopic.set(topicId, {
-        topicId,
-        topic: row.question.topic.name,
-        category: CATEGORY_LABELS[row.question.topic.category],
-        attempted: 1,
-        correct: row.isCorrect ? 1 : 0,
-      });
-    }
-  }
-
-  const byTopic = [...perTopic.values()]
-    .map((row) => ({
-      ...row,
-      accuracy: Math.round((row.correct / row.attempted) * 100),
-    }))
+  const byTopic: TopicAccuracy[] = byTopicRows
+    .map((row) => {
+      // COUNT() comes back as bigint over the wire; Number() is safe here — a
+      // student would need billions of answers to lose precision.
+      const attempted = Number(row.attempted);
+      const correct = Number(row.correct);
+      return {
+        topicId: row.topicId,
+        topic: row.topic,
+        category: CATEGORY_LABELS[row.category],
+        attempted,
+        correct,
+        accuracy: Math.round((correct / attempted) * 100),
+      };
+    })
     // Weakest first: the list is there to tell a student what to practise next.
     .sort((a, b) => a.accuracy - b.accuracy || b.attempted - a.attempted);
 
-  const correctCount = answered.filter((row) => row.isCorrect).length;
+  const questionsAnswered = overall.reduce((sum, row) => sum + row._count._all, 0);
+  const correctCount =
+    overall.find((row) => row.isCorrect)?._count._all ?? 0;
 
   return {
     attemptsCount: attemptTotals._count._all,
     examsCount: examCount,
-    questionsAnswered: answered.length,
+    questionsAnswered,
     correctCount,
     skippedCount: attemptTotals._sum.skippedCount ?? 0,
     overallAccuracy:
-      answered.length > 0 ? Math.round((correctCount / answered.length) * 100) : null,
+      questionsAnswered > 0
+        ? Math.round((correctCount / questionsAnswered) * 100)
+        : null,
     totalTimeSeconds: attemptTotals._sum.totalTimeSeconds ?? 0,
     byTopic,
     recentAttempts,

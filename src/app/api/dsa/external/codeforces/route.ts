@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/session";
-import { getCodeforcesProblems, isCodeforcesTag } from "@/lib/dsa";
+import { getCodeforcesProblems } from "@/lib/dsa";
+import { isCodeforcesTag } from "@/lib/dsa-labels";
 
 /**
  * Proxy for the Codeforces problemset API.

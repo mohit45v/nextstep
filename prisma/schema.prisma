@@ -191,6 +191,12 @@ model Question {
   @@index([topicId])
   @@index([category])
   @@index([status])
+  /// Composite indexes for `servableQuestions`, which is every student-facing
+  /// read: "approved questions in this topic" (practice, topic counts) and
+  /// "approved questions in this category" (building an exam paper). With 500+
+  /// drafts in the table, a plain status index still scans every draft.
+  @@index([status, topicId])
+  @@index([status, category])
 }
 
 model Option {
