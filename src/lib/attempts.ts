@@ -145,8 +145,9 @@ export async function recordAttempt({
     ];
   });
 
-  const attempt = await prisma.$transaction(async (tx) => {
-    return tx.examAttempt.create({
+  const attempt = await prisma.$transaction(
+    async (tx) =>
+      tx.examAttempt.create({
       data: {
         userId,
         mode,
@@ -163,8 +164,12 @@ export async function recordAttempt({
         questions: { create: rows },
       },
       select: { id: true },
-    });
-  });
+    }),
+    // Prisma's default is 2s to acquire a connection. A cold pool needs about
+    // three seconds for the first one, and a student who has just finished a
+    // paper must not be told their submission failed because of that.
+    { maxWait: 15_000, timeout: 20_000 },
+  );
 
   return { attemptId: attempt.id };
 }
@@ -283,7 +288,7 @@ export async function recordPracticeAnswer({
     });
 
     return attempt.id;
-  });
+  }, { maxWait: 15_000, timeout: 20_000 });
 
   return { attemptId: result, isCorrect };
 }

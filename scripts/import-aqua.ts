@@ -30,7 +30,7 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: [".env.local", ".env"], quiet: true });
 
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../src/generated/prisma/client";
+import { Prisma, PrismaClient } from "../src/generated/prisma/client";
 import type { Category, Difficulty } from "../src/generated/prisma/enums";
 import { DATASETS } from "../src/lib/datasets";
 
@@ -48,6 +48,7 @@ interface Options {
   category: Category;
   difficulty: Difficulty;
   dryRun: boolean;
+  concurrency: number;
 }
 
 function parseArgs(argv: string[]): Options {
@@ -60,7 +61,8 @@ function parseArgs(argv: string[]): Options {
   if (!file) {
     throw new Error(
       "Usage: npm run import:aqua -- --file <path to AQuA train.json> [--limit 500] " +
-        "[--topic <topicId>] [--category QUANTITATIVE] [--difficulty MEDIUM] [--dry-run]\n\n" +
+        "[--topic <topicId>] [--category QUANTITATIVE] [--difficulty MEDIUM] " +
+        "[--concurrency 8] [--dry-run]\n\n" +
         `Download it from ${dataset.url} — licence ${dataset.licence}.`,
     );
   }
@@ -71,9 +73,15 @@ function parseArgs(argv: string[]): Options {
     throw new Error("--limit must be a positive whole number.");
   }
 
+  const concurrency = Number(get("--concurrency") ?? 8);
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 16) {
+    throw new Error("--concurrency must be between 1 and 16.");
+  }
+
   return {
     file,
     limit,
+    concurrency,
     // Left null on purpose unless asked: a topic is an editorial decision, and
     // filing 500 algebra problems under one topic sight unseen is how a topic
     // ends up advertising questions nobody has read.
@@ -161,6 +169,94 @@ function mapItem(raw: AquaItem): { ok: true; value: MappedQuestion } | { ok: fal
   };
 }
 
+/**
+ * Writes one question and its options.
+ *
+ * An `upsert` keyed on `(source, sourceId)` rather than read-then-write: it is
+ * one round trip instead of two, and it closes the race between two importers
+ * running at once — which happens more often than you would think, since the
+ * obvious reaction to a slow import is to start another one.
+ *
+ * `status`, `topicId` and the review fields are never touched on update. A
+ * re-import must not resurrect something an editor rejected, nor quietly demote
+ * something they approved.
+ */
+async function writeQuestion(
+  prisma: PrismaClient,
+  question: MappedQuestion,
+  options: Options,
+): Promise<"created" | "updated" | "failed"> {
+  const { sourceId, prompt, options: choices, correctIndex, explanation } = question;
+
+  const shared = {
+    prompt,
+    explanation,
+    category: options.category,
+    difficulty: options.difficulty,
+    licence: dataset.licence,
+  };
+
+  try {
+    return await prisma.$transaction(
+      async (tx) => {
+      const before = await tx.question.findUnique({
+        where: { source_sourceId: { source: SOURCE, sourceId } },
+        select: { id: true },
+      });
+
+      const row = await tx.question.upsert({
+        where: { source_sourceId: { source: SOURCE, sourceId } },
+        create: {
+          status: "DRAFT",
+          source: SOURCE,
+          sourceId,
+          topicId: options.topicId,
+          companyTags: [],
+          ...shared,
+        },
+        update: shared,
+        select: { id: true },
+      });
+
+      // Replace the option list wholesale: matching edited rows up by index
+      // would quietly keep an option the source has since dropped.
+      await tx.option.deleteMany({ where: { questionId: row.id } });
+      await tx.option.createMany({
+        data: choices.map((text, order) => ({
+          questionId: row.id,
+          order,
+          text,
+          isCorrect: order === correctIndex,
+        })),
+      });
+
+        return before ? "updated" : "created";
+      },
+      {
+        // Defaults are 2s to get a connection and 5s to finish. Opening a
+        // connection to a hosted database takes about three seconds, so on a
+        // cold pool every transaction in the first batch failed with "Unable to
+        // start a transaction in the given time" — a timeout that had nothing to
+        // do with the work being slow.
+        maxWait: 20_000,
+        timeout: 30_000,
+      },
+    );
+  } catch (error) {
+    // A concurrent importer can win the race between the lookup and the insert.
+    // That is the unique index doing its job, so count it as an update rather
+    // than failing the run.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return "updated";
+    }
+    console.error(`  ! ${sourceId}: ${error instanceof Error ? error.message : error}`);
+    return "failed";
+  }
+}
+
 /* ---------------------------------------------------------------------------
    Import
    --------------------------------------------------------------------------- */
@@ -172,7 +268,17 @@ async function main() {
   if (!connectionString) {
     throw new Error("DATABASE_URL is not set. Fill in .env.local (or .env) first.");
   }
-  const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  // The pool is sized to the batch: `--concurrency 8` wants eight connections,
+  // and opening one against a hosted database costs seconds, so they are kept
+  // for the whole run rather than reopened between batches.
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({
+      connectionString,
+      max: options.concurrency,
+      idleTimeoutMillis: 5 * 60 * 1000,
+      connectionTimeoutMillis: 15_000,
+    }),
+  });
 
   if (options.topicId) {
     const topic = await prisma.topic.findUnique({ where: { id: options.topicId } });
@@ -184,6 +290,15 @@ async function main() {
       );
     }
   }
+
+  // Open the pool before the first batch rather than during it: connections
+  // cost seconds each, and a transaction that is waiting for one counts that
+  // wait against its own deadline.
+  await Promise.all(
+    Array.from({ length: options.concurrency }, () =>
+      prisma.$queryRaw`SELECT 1`.catch(() => undefined),
+    ),
+  );
 
   console.log(`Importing from ${options.file}`);
   console.log(`  source     ${SOURCE} (${dataset.licence})`);
@@ -202,12 +317,35 @@ async function main() {
   let created = 0;
   let updated = 0;
   let invalid = 0;
+  let failed = 0;
   let duplicateInFile = 0;
+  let lastReported = 0;
   const seen = new Set<string>();
   const reasons = new Map<string, number>();
+  const pending: MappedQuestion[] = [];
+
+  /**
+   * Writes one batch of questions concurrently.
+   *
+   * Each question is its own transaction — a batch is a unit of parallelism, not
+   * a unit of atomicity. One malformed row should not roll back the other seven,
+   * and a question plus its options is the thing that must be all-or-nothing.
+   */
+  async function writeBatch(batch: MappedQuestion[]) {
+    const results = await Promise.all(
+      batch.map((question) => writeQuestion(prisma, question, options)),
+    );
+    return {
+      created: results.filter((r) => r === "created").length,
+      updated: results.filter((r) => r === "updated").length,
+      failed: results.filter((r) => r === "failed").length,
+    };
+  }
 
   for await (const line of stream) {
-    if (created + updated + duplicateInFile >= options.limit) break;
+    // Count what is queued as well as what is written, or a batch in flight
+    // would let the loop read past --limit.
+    if (created + updated + duplicateInFile + pending.length >= options.limit) break;
 
     const text = line.trim();
     if (!text) continue;
@@ -242,71 +380,45 @@ async function main() {
       continue;
     }
 
-    const { sourceId, prompt, options: choices, correctIndex, explanation } = mapped.value;
+    pending.push(mapped.value);
 
-    const existing = await prisma.question.findUnique({
-      where: { source_sourceId: { source: SOURCE, sourceId } },
-      select: { id: true, status: true },
-    });
+    // Flush a batch whenever enough work has accumulated. Each question is a few
+    // round trips to a database a few hundred milliseconds away, so doing them
+    // one after another is almost entirely waiting — the pool does the same work
+    // in a fraction of the wall time.
+    if (pending.length >= options.concurrency) {
+      const batch = pending.splice(0, pending.length);
+      const outcome = await writeBatch(batch);
+      created += outcome.created;
+      updated += outcome.updated;
+      failed += outcome.failed;
+    }
 
-    // One transaction per question: the question and its options are a unit, and
-    // a question with half its options would be worse than no question.
-    await prisma.$transaction(async (tx) => {
-      const question = existing
-        ? await tx.question.update({
-            where: { id: existing.id },
-            data: {
-              prompt,
-              explanation,
-              // Re-importing must not quietly resurrect something an editor
-              // rejected, nor demote something they approved — so `status`,
-              // `topicId` and the review fields are left exactly as they are.
-              category: options.category,
-              difficulty: options.difficulty,
-              licence: dataset.licence,
-            },
-            select: { id: true },
-          })
-        : await tx.question.create({
-            data: {
-              status: "DRAFT",
-              source: SOURCE,
-              sourceId,
-              licence: dataset.licence,
-              topicId: options.topicId,
-              category: options.category,
-              difficulty: options.difficulty,
-              prompt,
-              explanation,
-              companyTags: [],
-            },
-            select: { id: true },
-          });
-
-      await tx.option.deleteMany({ where: { questionId: question.id } });
-      await tx.option.createMany({
-        data: choices.map((optionText, order) => ({
-          questionId: question.id,
-          order,
-          text: optionText,
-          isCorrect: order === correctIndex,
-        })),
-      });
-    });
-
-    if (existing) updated += 1;
-    else created += 1;
-
+    // Progress in round hundreds. Batched writes jump several at a time, so an
+    // exact `% 100` test would usually miss.
     const done = created + updated;
-    if (done % 100 === 0) console.log(`  …${done} questions`);
+    if (done - lastReported >= 100) {
+      lastReported = done - (done % 100);
+      console.log(`  …${lastReported} questions`);
+    }
   }
 
   stream.close();
+
+  // The last partial batch. Without this, up to `concurrency - 1` questions
+  // would be read, counted and then quietly never written.
+  if (pending.length > 0 && !options.dryRun) {
+    const outcome = await writeBatch(pending.splice(0, pending.length));
+    created += outcome.created;
+    updated += outcome.updated;
+    failed += outcome.failed;
+  }
 
   console.log("\nDone.");
   console.log(`  lines read        ${lines}`);
   console.log(`  created           ${created}`);
   console.log(`  updated           ${updated}`);
+  if (failed > 0) console.log(`  failed to write   ${failed}`);
   console.log(`  duplicate in file ${duplicateInFile}`);
   console.log(`  skipped (invalid) ${invalid}`);
   for (const [reason, count] of [...reasons.entries()].sort((a, b) => b[1] - a[1])) {

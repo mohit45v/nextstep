@@ -26,9 +26,49 @@ function createClient() {
   }
 
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString }),
+    adapter: new PrismaPg({
+      connectionString,
+      /*
+       * Pool settings, measured rather than guessed.
+       *
+       * Against Neon, opening a connection costs ~3 seconds (TLS, auth, and
+       * waking the compute); a query on an already-open one costs one network
+       * round trip. node-postgres defaults to closing idle connections after
+       * ten seconds, so a dev server that is quiet for a minute paid three
+       * seconds on the next page — and a page that fires three queries in
+       * parallel opened three connections and paid it three times over.
+       *
+       * Keeping a handful of connections open for five minutes turns that into
+       * a single round trip. Neon's own idle timeout is around five minutes, so
+       * there is no point holding them longer.
+       */
+      max: 8,
+      idleTimeoutMillis: 5 * 60 * 1000,
+      connectionTimeoutMillis: 15_000,
+      // TCP keepalives stop a NAT or load balancer silently dropping an idle
+      // connection and leaving us to discover it on the next query.
+      keepAlive: true,
+    }),
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
+}
+
+/**
+ * Opens a few connections immediately, instead of making the first visitor wait
+ * for them.
+ *
+ * Fire-and-forget on purpose: if the database is unreachable the real query will
+ * report it properly, and a warm-up failure must never take down module
+ * initialisation. Dev warms more because a dev server is one process serving one
+ * person; a production instance warms two and lets demand open the rest.
+ */
+function warmUp(client: PrismaClient) {
+  const connections = process.env.NODE_ENV === "production" ? 2 : 4;
+  void Promise.all(
+    Array.from({ length: connections }, () =>
+      client.$queryRaw`SELECT 1`.catch(() => undefined),
+    ),
+  );
 }
 
 /**
@@ -40,6 +80,12 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma = globalForPrisma.prisma ?? createClient();
+export const prisma =
+  globalForPrisma.prisma ??
+  (() => {
+    const client = createClient();
+    warmUp(client);
+    return client;
+  })();
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

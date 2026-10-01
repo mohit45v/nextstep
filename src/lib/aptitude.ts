@@ -279,19 +279,24 @@ export async function getExamPaper(packId: string): Promise<ExamPaper | null> {
   if (!pack) return null;
 
   // Ids first, shuffled in memory, then one fetch for the chosen rows. Postgres
-  // has no portable "random N rows" in Prisma's query API, and the bank is small
-  // enough that pulling ids is cheap.
+  // has no portable "random N rows" in Prisma's query API, and ids are cheap.
+  //
+  // One query for every category the pack needs, not one per category: against a
+  // database a few hundred milliseconds away, the number of round trips is the
+  // latency, and `IN` costs the same as `=`.
   const categories = [...new Set(pack.sections.map((s) => s.category))];
+  const candidates = await prisma.question.findMany({
+    where: { ...servableQuestions, category: { in: categories } },
+    select: { id: true, category: true },
+  });
+
   const idsByCategory = new Map<string, string[]>();
-  await Promise.all(
-    categories.map(async (category) => {
-      const rows = await prisma.question.findMany({
-        where: { ...servableQuestions, category },
-        select: { id: true },
-      });
-      idsByCategory.set(category, shuffle(rows.map((r) => r.id)));
-    }),
-  );
+  for (const category of categories) {
+    idsByCategory.set(
+      category,
+      shuffle(candidates.filter((c) => c.category === category).map((c) => c.id)),
+    );
+  }
 
   const chosenIds: string[] = [];
   const sections = pack.sections.map((section) => {

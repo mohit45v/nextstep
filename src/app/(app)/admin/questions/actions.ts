@@ -86,7 +86,7 @@ export async function reviewQuestion(
         isCorrect: order === data.correctOption,
       })),
     });
-  });
+  }, { maxWait: 15_000, timeout: 20_000 });
 
   // An approval changes what students are served, so the whole app's cached
   // content is stale, not just this page.
