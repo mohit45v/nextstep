@@ -6,6 +6,13 @@ import { Logo } from "@/components/ui/Logo";
 import { prisma } from "@/lib/prisma";
 import { DATASETS } from "@/lib/datasets";
 
+/**
+ * Rendered per request rather than at build time. The counts below come from the
+ * database, and a statically prerendered attribution page would keep claiming
+ * whatever was true when the project was built.
+ */
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Attributions",
   description:

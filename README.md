@@ -1,8 +1,8 @@
 # NextStep
 
-AI placement & career development platform for **Terna Engineering College** —
-aptitude practice, DSA drilling, company test series, skill-gap analysis and ATS
-resume tooling.
+Placement preparation for **Terna Engineering College** — aptitude practice with
+worked explanations, timed company mock tests scored on the server, a reviewed
+question bank, and DSA drilling.
 
 Sign-in is restricted to `@ternaengg.ac.in` Google Workspace accounts.
 
@@ -67,14 +67,23 @@ secret with:
 npx auth secret
 ```
 
-### 5. Create the tables and run
+### 5. Create the tables, load the content, run
 
 ```bash
-npm run db:migrate
+npm run db:migrate   # create the tables
+npm run db:seed      # load topics, questions, formula cards, company packs
 npm run dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3001> (the port is pinned in `package.json`, see below).
+
+`db:seed` is idempotent — every write is an upsert keyed on the content's own id,
+so you can run it after any schema change without duplicating anything. The
+content it loads lives in [prisma/seed-data.ts](prisma/seed-data.ts).
+
+The first time you sign in you are sent to `/onboarding` to set branch,
+graduation year and roll number. Nothing behind the login renders until that is
+done — see [src/app/(app)/layout.tsx](src/app/\(app\)/layout.tsx).
 
 ---
 
@@ -103,7 +112,19 @@ you need it for deployment anyway.
 
 **Shadow database.** `prisma migrate dev` needs a scratch database to detect
 drift. Hosted Postgres like Neon lets Prisma create one on the fly, so leave
-`SHADOW_DATABASE_URL` unset. Only set it if a provider forbids `CREATE DATABASE`.
+`SHADOW_DATABASE_URL` unset (an *empty string* is not "unset" to Prisma — it
+errors with `P1013` — so `prisma.config.ts` normalises it). Only set it if a
+provider forbids `CREATE DATABASE`.
+
+**`Timed out trying to acquire a postgres advisory lock` on migrate.** Migrations
+take a Postgres advisory lock, and Neon's *pooled* endpoint hands the next query
+to a different backend, so the lock is taken on one connection and waited for on
+another. [prisma.config.ts](prisma.config.ts) points the CLI at the direct
+endpoint by dropping `-pooler` from the host; the app keeps using the pooled one.
+Set `DIRECT_DATABASE_URL` if your provider names the pair differently. If a
+migrate run is interrupted the lock can be left held by an idle connection — find
+it with `select * from pg_locks where locktype = 'advisory'` and terminate that
+pid.
 
 ---
 
@@ -123,9 +144,16 @@ Three independent layers, all of which must agree:
 
 Route protection is handled by [src/proxy.ts](src/proxy.ts) (Next.js 16 renamed
 the `middleware` convention to `proxy`), which redirects anonymous visitors to
-`/login`. Server components additionally call `requireUser()` from
-[src/lib/session.ts](src/lib/session.ts), so the guarantee holds even if the
-matcher is ever misconfigured.
+`/login`. The public list it allows through is `PUBLIC_ROUTES` in
+[src/lib/constants.ts](src/lib/constants.ts).
+
+Pages do not rely on the proxy alone. Every route in the `(app)` group renders
+inside a layout that calls `requireProfileUser()` from
+[src/lib/session.ts](src/lib/session.ts) — one call that enforces both a session
+and a finished profile — and `/admin` adds `requireRole("ADMIN")` in its own
+layout. Route handlers call `requireApiUser()` and return 401 JSON, so the
+guarantee holds even if the proxy matcher is ever misconfigured. Server actions
+re-check too: an action is its own entry point and can be invoked directly.
 
 To change the allowed domain, edit `ALLOWED_EMAIL_DOMAIN` in
 [src/lib/constants.ts](src/lib/constants.ts) — it is the single source of truth.
@@ -136,41 +164,65 @@ To change the allowed domain, edit `ALLOWED_EMAIL_DOMAIN` in
 
 ```
 prisma/
-  schema.prisma            Database models (Auth.js + app tables)
+  schema.prisma            Database models (Auth.js, content, attempts)
+  migrations/              Four so far: init, content, attempts, question bank
+  seed-data.ts             The reviewed editorial content (seed's only consumer)
+  seed.ts                  npm run db:seed — idempotent upserts
+
+scripts/
+  import-aqua.ts           Streaming AQuA-RAT importer → DRAFT questions
 
 src/
   app/
-    layout.tsx             Root layout — dark theme, metadata template
-    page.tsx               Public landing page
+    layout.tsx             Root layout — metadata template
+    page.tsx               Public landing page (demo loop reads the live bank)
     login/                 Sign-in page (Google button, error messages)
+    onboarding/            Outside (app): branch / grad year / roll number
+    attributions/          Public: dataset credits, generated from the database
     (app)/                 Route group: everything behind auth
-      layout.tsx           Calls requireUser(), renders the AppShell
+      layout.tsx           requireProfileUser() — session + finished profile
       dashboard/
-      aptitude/            page + practice/ companies/ exam/ review/
-                           formulas/ analytics/
-    dsa/                   Outside (app) — ships its own navbar & drawer
-    api/                   Route handlers
+      profile/             View and edit the same fields as onboarding
+      aptitude/            page + practice/ companies/ exam/[packId]/
+                           review/ review/[attemptId]/ formulas/ analytics/
+      admin/               requireRole("ADMIN") in its layout
+        questions/         Review queue + per-question edit form
+    dsa/                   Ships its own navbar & drawer
+    api/
       auth/[...nextauth]/  Auth.js endpoints
+      aptitude/            index, evaluate, practice, bookmarks, analytics
+      dsa/                 topics, problems, Codeforces proxy
 
   components/
-    auth/                  SignOutButton
-    layout/                Navbar, NavDrawer, AppShell
-    dashboard/             DashboardMain, StreakHeatmap
-    aptitude/              The seven aptitude screens + session provider
+    auth/                  AccountMenu (name, branch, credits, sign out)
+    layout/                Navbar, NavDrawer, AppShell, nav-items
+    profile/               ProfileForm — shared by onboarding and /profile
+    admin/                 QuestionReviewForm
+    dashboard/             DashboardMain
+    aptitude/              The aptitude screens
+    landing/               Hero preview, header, reveal
     dsa/                   DSAPage
-    ui/                    (shared primitives — currently empty)
+    ui/                    Button, Card, Badge, Container, PageHeader, …
 
   lib/
     auth.ts                Full Auth.js config (Node runtime, Prisma adapter)
     auth.config.ts         Edge-safe half, shared with proxy.ts
-    session.ts             requireUser / requireRole / requireApiUser
+    session.ts             requireUser / requireRole / requireApiUser /
+                           requireProfileUser / getProfileUser
     prisma.ts              PrismaClient singleton
-    constants.ts           ALLOWED_EMAIL_DOMAIN and friends
-    routes.ts              ScreenType → URL map
+    aptitude.ts            Every student-facing content query (servableQuestions)
+    attempts.ts            Server-side scoring, review, progress aggregation
+    admin.ts               Review-queue queries (reads drafts — ADMIN only)
+    aptitude-labels.ts     Enum ↔ display label, shared with the seed
+    datasets.ts            Dataset registry: licences, authors, obligations
+    profile.ts             saveProfile, shared by both profile actions
+    format.ts              Server-side date/duration formatting
+    constants.ts           Domain, branches, marking, roll-number pattern
+    routes.ts              Route helpers (practiceRoute, examRoute, reviewRoute)
+    validation/            Zod schemas: profile, aptitude API, question editor
 
-  data/                    Static seed data (aptitude questions, formulas)
-  types/                   Shared types + next-auth module augmentation
-  hooks/                   (custom hooks — currently empty)
+  types/                   aptitude view models + next-auth augmentation
+  hooks/                   useInView, usePrefersReducedMotion
   generated/prisma/        Prisma Client output (gitignored)
 
   proxy.ts                 Route protection (formerly middleware.ts)
@@ -183,15 +235,83 @@ src/
 
 ## Scripts
 
-| Command              | What it does                                  |
-| -------------------- | --------------------------------------------- |
-| `npm run dev`        | Dev server on :3000                           |
-| `npm run build`      | Production build                              |
-| `npm run typecheck`  | TypeScript, no emit                           |
-| `npm run lint`       | ESLint                                        |
-| `npm run db:migrate` | Create + apply a migration                    |
-| `npm run db:push`    | Push schema without a migration (prototyping) |
-| `npm run db:studio`  | Browse the database in a GUI                  |
+| Command                | What it does                                        |
+| ---------------------- | --------------------------------------------------- |
+| `npm run dev`          | Dev server on :3001                                 |
+| `npm run build`        | Production build                                    |
+| `npm run typecheck`    | TypeScript, no emit                                 |
+| `npm run lint`         | ESLint                                              |
+| `npm run db:migrate`   | Create + apply a migration                          |
+| `npm run db:push`      | Push schema without a migration (prototyping)       |
+| `npm run db:seed`      | Load / refresh the editorial content (idempotent)   |
+| `npm run db:studio`    | Browse the database in a GUI                        |
+| `npm run import:aqua`  | Import AQuA-RAT questions as drafts (see below)     |
+
+---
+
+## The question bank
+
+Questions live in Postgres with an editorial status, and **only `APPROVED`
+questions are ever served to a student**. That rule is one object —
+`servableQuestions` in [src/lib/aptitude.ts](src/lib/aptitude.ts) — which every
+read spreads into its `where` clause, so it cannot be forgotten at a call site:
+
+```ts
+export const servableQuestions = {
+  status: "APPROVED",
+  topicId: { not: null },
+};
+```
+
+### Importing
+
+> **Not IndiaBix.** Their content is copyrighted; scraping it would infringe
+> copyright and likely breach the IT Act 2000. The datasets below are openly
+> licensed and do the job.
+
+[AQuA-RAT](https://github.com/google-deepmind/AQuA) (Apache-2.0) is ~100k algebra
+word problems, each with options and a written rationale that becomes the
+explanation a student sees. Download it, then import a slice:
+
+```bash
+curl -L -o /tmp/aqua-train.json https://raw.githubusercontent.com/google-deepmind/AQuA/master/train.json
+npm run import:aqua -- --file /tmp/aqua-train.json --limit 500
+```
+
+Flags: `--limit` (default 500), `--topic <topicId>`, `--category`,
+`--difficulty`, `--dry-run`.
+
+The importer streams the file line by line — it is JSON Lines, and
+`JSON.parse` on 160 MB to read 500 of its 100,000 items is a waste of memory.
+AQuA items have no id, so the dedupe key is a SHA-256 of the normalised question
+text stored as `sourceId`; with the unique index on `(source, sourceId)`,
+**re-running the importer creates zero duplicates** and never resurrects
+something you rejected.
+
+### Reviewing
+
+Everything imported arrives as `DRAFT` with no topic, which makes it unreachable
+from practice and from every mock paper. Review it at `/admin/questions`
+(`ADMIN` only — set your `role` in Prisma Studio, then sign out and back in,
+because the role is carried in the JWT).
+
+The review form will not let you approve a question without a topic and a marked
+correct option, and it records who decided and when. **Read every question you
+approve**: AQuA's rationales are crowd-sourced, quality is uneven and some stated
+answers are simply wrong. That is the entire reason the draft state exists.
+
+### Attribution
+
+Both open datasets require credit, so [/attributions](http://localhost:3001/attributions)
+is public — attribution behind a login is not attribution. The page is generated
+from the database and lists only sources that actually have approved questions,
+with the licence, the authors and what we changed. New source? Add it to
+[src/lib/datasets.ts](src/lib/datasets.ts); the page flags any source serving
+questions without a registry entry.
+
+Note that LogiQA 2.0 is CC BY-NC-SA 4.0 — **non-commercial and share-alike**.
+That restriction travels with the questions and constrains NextStep itself, so
+read `obligations` in the registry before importing it.
 
 ---
 
@@ -203,25 +323,40 @@ measured, the screen says so instead of inventing one.
 | Area | Status |
 | --- | --- |
 | Google sign-in, Terna domain lock, sessions | Real — Postgres via Prisma |
-| Aptitude questions, explanations, formula cards | Real content, served from `src/data` (not yet in the DB) |
-| Mock test scoring (+4 / −1), timing, review | Real — scored server-side in `/api/aptitude/evaluate` |
+| Onboarding and profile (branch, grad year, roll number) | Real — Zod-validated server actions, roll number `@unique` |
+| Aptitude topics, questions, formula cards, company packs | Real — in Postgres, seeded from `prisma/seed-data.ts` |
+| Mock test scoring (+4 / −1), timing | Real — recomputed server-side from the option rows in `/api/aptitude/evaluate`; the paper sent to the browser contains no answer key |
+| Attempt history and review | Real — stored; `/aptitude/review/<id>` survives a refresh |
+| Per-topic accuracy, overall accuracy, time practised | Real — aggregated from your own `QuestionAttempt` rows |
+| Bookmarks | Real — one row per student per question |
+| Draft/approve question bank, importer, attributions | Real — `/admin/questions`, `/attributions` |
 | DSA curated problems and LeetCode links | Real content, served from a route handler |
 | Codeforces live problems | Real — proxied from the Codeforces API, cached 5 min |
-| Practice history, accuracy, streaks, leaderboard | **Not built.** Shown as empty states |
+| Streaks and leaderboard | **Not built.** Weekend 12 in [PLAN.md](PLAN.md) |
 | DSA solve ticks | Session-only, not persisted. The screen says so |
 
-Attempts are not written to the database yet, so results vanish on refresh.
-That is Weekend 4 in [PLAN.md](PLAN.md).
+A few deliberate honesty details worth knowing:
+
+- A company pack card shows **both** the paper's real question count and how many
+  the approved bank can currently fill, and the paper you sit is the smaller
+  number rather than a padded one.
+- A topic with no approved questions is listed under "Coming soon" instead of
+  being shown with a question count it does not have.
+- A practice session serves at most 20 questions; when a topic holds more, the
+  screen says which fraction you are getting.
+- `Stat` renders an em-dash, not a zero, when a number has not been measured yet.
+
+### Known assumption
+
+The roll-number format in `ROLL_NUMBER_PATTERN`
+([src/lib/constants.ts](src/lib/constants.ts)) is a guess: 6–12 uppercase
+alphanumerics containing at least two digits. Check it against a real ID card and
+tighten it — the whole rule is that one constant.
 
 ### Planned
 
-Three larger features are scheduled from Weekend 5 (see [PLAN.md](PLAN.md)):
+Two larger features remain (see [PLAN.md](PLAN.md)):
 
-- **Question bank** — importer for [AQuA-RAT](https://github.com/google-deepmind/AQuA)
-  (Apache 2.0) and [LogiQA 2.0](https://github.com/csitfun/LogiQA2.0_Chinese)
-  (CC BY-NC-SA 4.0), behind a draft/approve review screen so nothing unreviewed
-  reaches a student. Both datasets require attribution — an `/attributions` page
-  ships with the importer.
 - **Code runner** — a `CodeRunner` interface written against the Judge0 API
   shape, so the backend is swappable between self-hosted
   [CodeBox](https://github.com/hiteshchoudhary/Codebox) (MIT), Judge0 CE, or a

@@ -255,6 +255,16 @@ export function TopicPractice({
             />
           ) : (
             <Card className="p-6">
+              {/* A topic can hold more questions than one session serves. Say so,
+                  rather than letting the sidebar's count and "1 of 20" disagree. */}
+              {activeTopic.questionCount > questions.length && (
+                <p className="mb-4 rounded-input bg-inset px-4 py-2.5 text-xs text-ink-subtle">
+                  This session draws {questions.length} of the{" "}
+                  {activeTopic.questionCount} questions in {activeTopic.name}. Come
+                  back for a fresh set.
+                </p>
+              )}
+
               {/* Question meta */}
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-4">
                 <div className="flex flex-wrap items-center gap-2">
