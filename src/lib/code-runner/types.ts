@@ -50,6 +50,14 @@ export interface RunResult {
   compileOutput: string;
   /** Wall/CPU time the engine reported, in milliseconds. Null when unknown. */
   timeMs: number | null;
+  /**
+   * What `timeMs` actually measured, when it needs qualifying.
+   *
+   * Judge0 reports the program's own CPU time and leaves this unset. The local
+   * Docker runner can only measure from outside the container, so it says so
+   * rather than passing off "python started, ran and exited" as execution time.
+   */
+  timeNote?: string;
   memoryKb: number | null;
   exitCode: number | null;
 }

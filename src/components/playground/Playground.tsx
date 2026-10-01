@@ -215,6 +215,14 @@ export function Playground({ configured, runnerName }: PlaygroundProps) {
                     <dd className="mt-0.5 font-semibold text-ink tabular-nums">
                       {result.timeMs === null ? "—" : `${result.timeMs} ms`}
                     </dd>
+                    {/* Judge0 measures the program's CPU time; the Docker runner
+                        can only measure from outside the container and says so
+                        rather than overstating what it knows. */}
+                    {result.timeNote && (
+                      <dd className="mt-0.5 text-[11px] leading-snug text-ink-subtle">
+                        {result.timeNote}
+                      </dd>
+                    )}
                   </div>
                   <div>
                     <dt className="text-ink-subtle">Memory</dt>

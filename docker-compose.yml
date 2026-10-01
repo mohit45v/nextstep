@@ -1,4 +1,18 @@
-# A Judge0-compatible code runner for local development.
+# A Judge0-compatible code runner.
+#
+# ⚠️  This does NOT work on Docker Desktop (macOS or Windows).
+#
+# Judge0's sandbox, isolate, needs **cgroup v1**. Docker Desktop's VM has been
+# cgroup v2 only since the `deprecatedCgroupv1` setting was removed, so every
+# submission fails with:
+#
+#   Failed to create control group /sys/fs/cgroup/memory/box-0/: No such file or directory
+#   No such file or directory @ rb_sysopen - /box/main.cpp
+#
+# For local development use the Docker runner instead — `CODE_RUNNER="docker"`
+# in .env.local, no compose file needed. Use this on a Linux host with cgroup v1
+# (a VPS, a lab machine, a Codespace), or point CODE_RUNNER_URL at a hosted
+# Judge0:
 #
 #   docker compose up -d
 #   # then in .env.local:
