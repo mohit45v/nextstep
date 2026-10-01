@@ -87,6 +87,13 @@ async function seedQuestions() {
 
     const data = {
       topicId: question.topicId,
+      // Hand-written and reviewed by whoever wrote this file, so it seeds as
+      // APPROVED. Everything that arrives from an importer starts as DRAFT —
+      // see scripts/import-aqua.ts.
+      status: "APPROVED" as const,
+      source: "curated",
+      sourceId: question.id,
+      licence: null,
       category: CATEGORY_BY_LABEL[question.category],
       prompt: question.question,
       explanation: question.explanation,

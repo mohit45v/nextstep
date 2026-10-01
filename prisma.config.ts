@@ -8,6 +8,27 @@ import { defineConfig } from "prisma/config";
 // `.env.local` wins, `.env` is a fallback. First file to define a key wins.
 loadEnv({ path: [".env.local", ".env"], quiet: true });
 
+/**
+ * Neon hands out two connection strings: a pooled one (`...-pooler...`) and a
+ * direct one. The app wants the pooled endpoint — serverless functions open and
+ * close connections constantly. Migrations want the direct endpoint, because
+ * `prisma migrate` takes a Postgres **advisory lock**, and a transaction pooler
+ * hands the next query to a different backend, so the lock is taken on one
+ * connection and waited for on another. The symptom is a ten-second
+ * "Timed out trying to acquire a postgres advisory lock" on every migrate.
+ *
+ * `DIRECT_DATABASE_URL` wins if set; otherwise the pooled host is converted by
+ * dropping the `-pooler` suffix, which is how Neon names the pair.
+ */
+function migrationUrl(): string | undefined {
+  const direct = process.env["DIRECT_DATABASE_URL"];
+  if (direct) return direct;
+
+  const pooled = process.env["DATABASE_URL"];
+  if (!pooled) return undefined;
+  return pooled.replace("-pooler.", ".");
+}
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
@@ -19,7 +40,7 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: migrationUrl(),
     // `prisma migrate dev` needs a second, throwaway database to detect drift.
     // `npx prisma dev` provides one; hosted Postgres usually does not, in which
     // case leave this unset and Prisma creates a temporary one itself. An empty

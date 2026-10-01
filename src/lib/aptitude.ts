@@ -33,10 +33,21 @@ import type { Prisma } from "@/generated/prisma/client";
 /**
  * The filter for questions a student is allowed to be served.
  *
- * Today: any question that has been filed under a topic. Weekend 5 adds
- * `status: "APPROVED"` here, and every screen inherits it.
+ * Two conditions, both deliberate:
+ *
+ *  * `status: "APPROVED"` — a question nobody has read is never shown to a
+ *    student. Imported questions arrive as DRAFT and stay invisible until
+ *    somebody approves them on /admin/questions.
+ *  * `topicId: { not: null }` — an approved question still needs a topic, or it
+ *    would be unreachable from practice and would break the per-topic analytics.
+ *    The review screen enforces this before it will let you approve anything.
+ *
+ * Every read in this file and in `attempts.ts` spreads this object. That is the
+ * mechanism behind "a student only ever sees APPROVED questions": there is one
+ * filter, not a convention to remember at each call site.
  */
 export const servableQuestions = {
+  status: "APPROVED",
   topicId: { not: null },
 } satisfies Prisma.QuestionWhereInput;
 
