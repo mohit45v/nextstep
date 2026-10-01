@@ -24,12 +24,14 @@ import {
   DIFFICULTY_BY_LABEL,
   PACK_DIFFICULTY_BY_LABEL,
 } from "../src/lib/aptitude-labels";
+import { DSA_BRANCH_BY_LABEL } from "../src/lib/dsa-labels";
 import {
   APTITUDE_TOPICS,
   COMPANY_PACKS,
   FORMULA_CARDS,
   SAMPLE_QUESTIONS,
 } from "./seed-data";
+import { DSA_PROBLEMS, DSA_TOPICS } from "./seed-data-dsa";
 
 function connectionString(): string {
   const url = process.env.DATABASE_URL;
@@ -178,12 +180,65 @@ async function seedCompanyPacks() {
   console.log(`  company packs    ${COMPANY_PACKS.length}`);
 }
 
+/* ---------------------------------------------------------------------------
+   DSA hub
+   --------------------------------------------------------------------------- */
+
+async function seedDsa() {
+  for (const [index, topic] of DSA_TOPICS.entries()) {
+    const data = {
+      name: topic.name,
+      description: topic.description,
+      branch: DSA_BRANCH_BY_LABEL[topic.branch],
+      order: index,
+    };
+
+    await prisma.dsaTopic.upsert({
+      where: { id: topic.id },
+      create: { id: topic.id, ...data },
+      update: data,
+    });
+  }
+
+  let problemCount = 0;
+  for (const [topicId, problems] of Object.entries(DSA_PROBLEMS)) {
+    if (!DSA_TOPICS.some((t) => t.id === topicId)) {
+      throw new Error(`DSA problems reference unknown topic "${topicId}".`);
+    }
+
+    for (const [index, problem] of problems.entries()) {
+      const data = {
+        topicId,
+        title: problem.title,
+        difficulty: DIFFICULTY_BY_LABEL[
+          (problem.difficulty.charAt(0).toUpperCase() +
+            problem.difficulty.slice(1)) as "Easy" | "Medium" | "Hard"
+        ],
+        link: problem.link ?? null,
+        description: problem.description ?? null,
+        order: index,
+      };
+
+      await prisma.dsaProblem.upsert({
+        where: { id: problem.id },
+        create: { id: problem.id, ...data },
+        update: data,
+      });
+      problemCount += 1;
+    }
+  }
+
+  console.log(`  dsa topics       ${DSA_TOPICS.length}`);
+  console.log(`  dsa problems     ${problemCount}`);
+}
+
 async function main() {
-  console.log("Seeding aptitude content…");
+  console.log("Seeding content…");
   await seedTopics();
   await seedQuestions();
   await seedFormulaCards();
   await seedCompanyPacks();
+  await seedDsa();
   console.log("Done.");
 }
 

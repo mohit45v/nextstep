@@ -41,7 +41,8 @@ model User {
   sessions          Session[]
   attempts          ExamAttempt[]
   bookmarks         Bookmark[]
-  reviewedQuestions Question[]    @relation("QuestionReviewer")
+  reviewedQuestions Question[]     @relation("QuestionReviewer")
+  problemSolves     ProblemSolve[]
 
   @@index([role])
 }
@@ -338,5 +339,76 @@ model Bookmark {
 
   /// One bookmark per student per question — the toggle is idempotent.
   @@unique([userId, questionId])
+  @@index([userId])
+}
+
+/**
+ * ===========================================================================
+ * DSA hub
+ * ---------------------------------------------------------------------------
+ * The curated sheets used to be two hardcoded objects inside route handlers,
+ * and a "solved" tick was a `useState` that the screen admitted it could not
+ * save. Both now live here.
+ * `totalProblems` is deliberately absent from DsaTopic: it is a `COUNT(*)` like
+ * every other count in this app, so a topic cannot advertise problems it does
+ * not have.
+ * ===========================================================================
+ */
+
+/// Which branch a sheet is aimed at. CS_IT covers Computer Engineering and IT,
+/// which share a syllabus for this purpose.
+enum DsaBranch {
+  GENERAL
+  CS_IT
+  AIDS
+  ELECTRICAL
+  MECHANICAL
+  CIVIL
+}
+
+model DsaTopic {
+  /// Readable slug ("arrays-hashing") — it appears in API paths.
+  id          String    @id
+  name        String
+  description String
+  branch      DsaBranch
+  order       Int       @default(0)
+
+  problems DsaProblem[]
+
+  @@index([branch])
+}
+
+model DsaProblem {
+  id          String     @id
+  topicId     String
+  title       String
+  /// Reuses the aptitude difficulty scale so one word means one thing app-wide.
+  difficulty  Difficulty
+  /// LeetCode or reference URL. Null for problems with no public link yet —
+  /// the row says so rather than linking somewhere unhelpful.
+  link        String?
+  description String?
+  order       Int        @default(0)
+
+  topic  DsaTopic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  solves ProblemSolve[]
+
+  @@index([topicId])
+}
+
+model ProblemSolve {
+  id        String   @id @default(cuid())
+  userId    String
+  problemId String
+  solvedAt  DateTime @default(now())
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem DsaProblem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  /// One tick per student per problem. The composite unique is what makes the
+  /// toggle idempotent: ticking twice is one row, so a retried request after a
+  /// flaky connection cannot double-count progress.
+  @@unique([userId, problemId])
   @@index([userId])
 }

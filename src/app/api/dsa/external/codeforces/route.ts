@@ -1,64 +1,42 @@
 import { NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/session";
+import { getCodeforcesProblems, isCodeforcesTag } from "@/lib/dsa";
 
+/**
+ * Proxy for the Codeforces problemset API.
+ *
+ * It exists so the browser never calls Codeforces directly: the response is
+ * cached for five minutes server-side and shared by every student, instead of
+ * each visitor hitting a rate-limited public API themselves.
+ *
+ * The tag is checked against a fixed list rather than passed through. An
+ * arbitrary query parameter forwarded to a third party is a small open proxy,
+ * and it would also blow the cache apart one unique tag at a time.
+ */
 export async function GET(request: Request) {
   const user = await requireApiUser();
   if (user instanceof Response) return user;
 
-  const { searchParams } = new URL(request.url);
-  const tag = searchParams.get("tag") || "dp";
-
-  try {
-    const cfRes = await fetch(
-      `https://codeforces.com/api/problemset.problems?tags=${encodeURIComponent(tag)}`,
-      { next: { revalidate: 300 } }
-    );
-
-    if (!cfRes.ok) {
-      return NextResponse.json(
-        { error: `Codeforces API returned HTTP ${cfRes.status}` },
-        { status: cfRes.status }
-      );
-    }
-
-    const data = await cfRes.json();
-
-    if (data.status !== "OK") {
-      return NextResponse.json(
-        { error: data.comment || "Failed to fetch from Codeforces" },
-        { status: 400 }
-      );
-    }
-
-    const rawProblems = data.result.problems || [];
-    const formatted = rawProblems.slice(0, 30).map((p: { contestId: number; index: string; name: string; rating?: number; tags: string[] }) => {
-      let difficulty: "easy" | "medium" | "hard" = "medium";
-      if (p.rating) {
-        if (p.rating < 1200) difficulty = "easy";
-        else if (p.rating >= 1700) difficulty = "hard";
-      }
-
-      return {
-        id: `cf-${p.contestId}-${p.index}`,
-        title: `${p.name} (CF ${p.contestId}${p.index})`,
-        difficulty,
-        rating: p.rating,
-        tags: p.tags,
-        solved: false,
-        link: `https://codeforces.com/problemset/problem/${p.contestId}/${p.index}`,
-        source: "Codeforces API",
-      };
-    });
-
-    return NextResponse.json({
-      tag,
-      totalCount: formatted.length,
-      problems: formatted,
-    });
-  } catch (error) {
+  const requested = new URL(request.url).searchParams.get("tag") ?? "dp";
+  if (!isCodeforcesTag(requested)) {
     return NextResponse.json(
-      { error: "Failed to connect to Codeforces live API", details: String(error) },
-      { status: 500 }
+      { success: false, error: `Unknown tag "${requested}".` },
+      { status: 400 },
     );
   }
+
+  const result = await getCodeforcesProblems(requested);
+  if ("error" in result) {
+    // 502: we are fine, the upstream is not. A 500 here would send students
+    // looking for a bug in NextStep.
+    return NextResponse.json(
+      { success: false, error: result.error },
+      { status: 502 },
+    );
+  }
+
+  return NextResponse.json({
+    success: true,
+    data: { tag: requested, problems: result.problems },
+  });
 }

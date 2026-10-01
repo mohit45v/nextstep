@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, RefreshCw, Search } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, ExternalLink, RefreshCw, Search } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   Badge,
@@ -12,152 +13,147 @@ import {
   EmptyState,
   PageHeader,
 } from "@/components/ui";
+import { CODEFORCES_TAGS } from "@/lib/dsa";
+import { DSA_BRANCH_FILTERS, type DsaBranchFilter } from "@/lib/dsa-labels";
+import type { DsaProblemView, DsaTopicSummary, LiveProblem } from "@/types/dsa";
 
-export interface DSATopic {
-  id: string;
-  name: string;
-  slug: string;
-  description: string;
-  branch: "General" | "CS & IT" | "AIDS" | "Electrical" | "Mechanical" | "Civil";
-  totalProblems: number;
+interface DSAPageProps {
+  topics: DsaTopicSummary[];
+  activeTopic: DsaTopicSummary | null;
+  problems: DsaProblemView[];
+  branch: DsaBranchFilter;
+  mode: "curated" | "live";
+  tag: string;
+  /** Set when the student's profile picked the branch rather than the URL. */
+  branchFromProfile: boolean;
 }
 
-export interface DSAProblem {
-  id: string;
-  topicId?: string;
-  title: string;
-  difficulty: "easy" | "medium" | "hard";
-  solved: boolean;
-  link?: string;
-  rating?: number;
-  source?: string;
-}
-
-const BRANCH_OPTIONS = [
-  "All Branches",
-  "CS & IT",
-  "AIDS",
-  "Electrical",
-  "Mechanical",
-  "Civil",
-];
-
-const CODEFORCES_TAGS = [
-  { tag: "dp", label: "Dynamic Programming" },
-  { tag: "graphs", label: "Graphs" },
-  { tag: "trees", label: "Trees" },
-  { tag: "math", label: "Math" },
-  { tag: "greedy", label: "Greedy" },
-  { tag: "shortest paths", label: "Shortest Paths" },
-];
-
-type Status = "idle" | "loading" | "ready" | "error";
-
-export default function DSAPage() {
-  const [mode, setMode] = useState<"curated" | "live">("curated");
-  const [selectedBranch, setSelectedBranch] = useState("All Branches");
-
-  const [topics, setTopics] = useState<DSATopic[]>([]);
-  const [topicsStatus, setTopicsStatus] = useState<Status>("loading");
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
-
-  const [problems, setProblems] = useState<DSAProblem[]>([]);
-  const [problemsStatus, setProblemsStatus] = useState<Status>("idle");
-
-  const [activeLiveTag, setActiveLiveTag] = useState("dp");
+/**
+ * The DSA hub.
+ *
+ * Two changes worth knowing about:
+ *
+ *  * **The sheets are server-rendered.** Branch, topic and mode live in the URL,
+ *    so the first paint already has the topic list and its problems. The old
+ *    version mounted empty and then fetched topics, waited, fetched problems,
+ *    waited — two round trips before a student saw anything.
+ *  * **A tick is a row.** `ProblemSolve` is keyed `(userId, problemId)`, so
+ *    progress survives a refresh, a re-login and a different machine. The update
+ *    is optimistic and rolls back if the write fails, rather than quietly
+ *    disagreeing with the database.
+ */
+export default function DSAPage({
+  topics,
+  activeTopic,
+  problems,
+  branch,
+  mode,
+  tag,
+  branchFromProfile,
+}: DSAPageProps) {
   const [search, setSearch] = useState("");
 
   /**
-   * Locally-ticked problems.
-   *
-   * The API route this used to PATCH returned `{ solved: true }` without
-   * writing anything, so progress looked saved and silently vanished on
-   * refresh. That route is gone. Ticking still works for the current session,
-   * and the notice below says plainly that it is not persisted yet.
+   * Solve state, seeded from the server and then owned here so a click feels
+   * instant. `failed` carries the one case the student must be told about: the
+   * write did not land, so the tick has been put back.
    */
-  const [solvedLocally, setSolvedLocally] = useState<Record<string, boolean>>({});
+  const [solved, setSolved] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(problems.map((p) => [p.id, p.solved])),
+  );
+  const [saveFailed, setSaveFailed] = useState(false);
 
+  const [liveProblems, setLiveProblems] = useState<LiveProblem[]>([]);
+  const [liveStatus, setLiveStatus] = useState<"idle" | "loading" | "ready" | "error">(
+    "idle",
+  );
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  // The live feed is a secondary tab, so it is fetched on demand rather than
+  // made part of the page's server render — nobody should wait on Codeforces to
+  // see their own curated sheet.
   useEffect(() => {
-    if (mode !== "curated") return;
+    if (mode !== "live") return;
 
     const controller = new AbortController();
 
+    // The status updates live inside the async body on purpose: a synchronous
+    // setState in an effect is an extra render before the request has even
+    // started, and React's lint rule says so.
     (async () => {
-      setTopicsStatus("loading");
+      setLiveStatus("loading");
+      setLiveError(null);
       try {
-        const res = await fetch("/api/dsa/topics", { signal: controller.signal });
-        const data: DSATopic[] = await res.json();
-        setTopics(data);
-        setTopicsStatus("ready");
-      } catch {
-        if (!controller.signal.aborted) setTopicsStatus("error");
+        const res = await fetch(
+          `/api/dsa/external/codeforces?tag=${encodeURIComponent(tag)}`,
+          { signal: controller.signal },
+        );
+        const body = await res.json();
+        if (!res.ok || !body.success) throw new Error(body?.error ?? "request failed");
+        setLiveProblems(body.data.problems);
+        setLiveStatus("ready");
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setLiveError(error instanceof Error ? error.message : null);
+        setLiveStatus("error");
       }
     })();
 
     return () => controller.abort();
-  }, [mode]);
+  }, [mode, tag, reloadToken]);
 
-  const filteredTopics = useMemo(() => {
-    if (selectedBranch === "All Branches") return topics;
-    return topics.filter((t) => t.branch === selectedBranch);
-  }, [topics, selectedBranch]);
+  async function toggleSolved(problemId: string) {
+    const next = !solved[problemId];
+    setSolved((prev) => ({ ...prev, [problemId]: next }));
+    setSaveFailed(false);
 
-  /**
-   * Derived rather than stored. The old code kept this in state and corrected
-   * it from an effect whenever the branch filter changed, costing an extra
-   * render and briefly showing a topic that was not in the filtered list.
-   */
-  const activeTopicId = useMemo(() => {
-    if (selectedTopicId && filteredTopics.some((t) => t.id === selectedTopicId)) {
-      return selectedTopicId;
+    try {
+      const res = await fetch("/api/dsa/solves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ problemId, solved: next }),
+      });
+      if (!res.ok) throw new Error("request failed");
+    } catch {
+      // Roll back. A tick that looks saved and is not is exactly the bug this
+      // screen used to have.
+      setSolved((prev) => ({ ...prev, [problemId]: !next }));
+      setSaveFailed(true);
     }
-    return filteredTopics[0]?.id ?? null;
-  }, [filteredTopics, selectedTopicId]);
+  }
 
-  useEffect(() => {
-    const url =
-      mode === "curated"
-        ? activeTopicId
-          ? `/api/dsa/topics/${activeTopicId}/problems`
-          : null
-        : `/api/dsa/external/codeforces?tag=${encodeURIComponent(activeLiveTag)}`;
+  const term = search.trim().toLowerCase();
 
-    if (!url) return;
+  const visibleCurated = useMemo(
+    () => (term ? problems.filter((p) => p.title.toLowerCase().includes(term)) : problems),
+    [problems, term],
+  );
 
-    // Aborting on change stops a slow response for the previous topic from
-    // overwriting the current one.
-    const controller = new AbortController();
+  const visibleLive = useMemo(
+    () =>
+      term ? liveProblems.filter((p) => p.title.toLowerCase().includes(term)) : liveProblems,
+    [liveProblems, term],
+  );
 
-    (async () => {
-      setProblemsStatus("loading");
-      try {
-        const res = await fetch(url, { signal: controller.signal });
-        const data = await res.json();
-        setProblems(mode === "curated" ? data : (data.problems ?? []));
-        setProblemsStatus("ready");
-      } catch {
-        if (!controller.signal.aborted) setProblemsStatus("error");
+  const solvedCount = problems.filter((p) => solved[p.id]).length;
+  const href = (params: Record<string, string | undefined>) => {
+    const search = new URLSearchParams();
+    const merged = { branch, mode, tag, topic: activeTopic?.id, ...params };
+    for (const [key, value] of Object.entries(merged)) {
+      if (value && !(key === "branch" && value === "All") && !(key === "mode" && value === "curated")) {
+        search.set(key, value);
       }
-    })();
-
-    return () => controller.abort();
-  }, [mode, activeTopicId, activeLiveTag]);
-
-  const activeTopic = topics.find((t) => t.id === activeTopicId) ?? null;
-
-  const visibleProblems = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    if (!term) return problems;
-    return problems.filter((p) => p.title.toLowerCase().includes(term));
-  }, [problems, search]);
-
-  const solvedCount = visibleProblems.filter((p) => solvedLocally[p.id]).length;
+    }
+    const query = search.toString();
+    return query ? `/dsa?${query}` : "/dsa";
+  };
 
   return (
     <Container>
       <PageHeader
         title="DSA problems"
-        description="Curated branch-wise sheets with direct LeetCode links, plus a live feed from the Codeforces problemset API."
+        description="Curated branch-wise sheets with direct LeetCode links, plus a live feed from the Codeforces problemset API. Your ticks are saved to your account."
       />
 
       {/* Mode switch */}
@@ -168,60 +164,64 @@ export default function DSAPage() {
             { id: "live", label: "Live from Codeforces" },
           ] as const
         ).map((m) => (
-          <button
+          <Link
             key={m.id}
-            type="button"
-            onClick={() => setMode(m.id)}
+            href={href({ mode: m.id, topic: m.id === "live" ? undefined : activeTopic?.id })}
             className={cn(
-              "cursor-pointer rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+              "rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
               mode === m.id
                 ? "border-accent bg-accent text-white"
                 : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
             )}
           >
             {m.label}
-          </button>
+          </Link>
         ))}
       </div>
 
       {/* Branch filter (curated only) */}
       {mode === "curated" && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {BRANCH_OPTIONS.map((branch) => (
-            <button
-              key={branch}
-              type="button"
-              onClick={() => setSelectedBranch(branch)}
-              className={cn(
-                "cursor-pointer rounded-full border px-3.5 py-1 text-xs font-medium transition-colors",
-                selectedBranch === branch
-                  ? "border-ink bg-ink text-white"
-                  : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
-              )}
-            >
-              {branch}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {DSA_BRANCH_FILTERS.map((option) => (
+              <Link
+                key={option}
+                href={href({ branch: option, topic: undefined })}
+                className={cn(
+                  "rounded-full border px-3.5 py-1 text-xs font-medium transition-colors",
+                  branch === option
+                    ? "border-ink bg-ink text-white"
+                    : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
+                )}
+              >
+                {option === "All" ? "All branches" : option}
+              </Link>
+            ))}
+          </div>
+          {branchFromProfile && (
+            <p className="mt-2 text-xs text-ink-subtle">
+              Showing the sheets for your branch. Pick another above to see the rest.
+            </p>
+          )}
+        </>
       )}
 
       {/* Live tag filter */}
       {mode === "live" && (
         <div className="mt-4 flex flex-wrap gap-2">
           {CODEFORCES_TAGS.map((t) => (
-            <button
+            <Link
               key={t.tag}
-              type="button"
-              onClick={() => setActiveLiveTag(t.tag)}
+              href={href({ tag: t.tag })}
               className={cn(
-                "cursor-pointer rounded-full border px-3.5 py-1 text-xs font-medium transition-colors",
-                activeLiveTag === t.tag
+                "rounded-full border px-3.5 py-1 text-xs font-medium transition-colors",
+                tag === t.tag
                   ? "border-ink bg-ink text-white"
                   : "border-line bg-surface text-ink-muted hover:border-line-strong hover:text-ink",
               )}
             >
               {t.label}
-            </button>
+            </Link>
           ))}
         </div>
       )}
@@ -231,53 +231,57 @@ export default function DSAPage() {
         {mode === "curated" && (
           <aside>
             <p className="px-1 pb-2.5 text-[11px] font-semibold tracking-wider text-ink-subtle uppercase">
-              Topics ({filteredTopics.length})
+              Topics ({topics.length})
             </p>
 
-            {topicsStatus === "loading" && (
-              <p className="px-1 text-sm text-ink-subtle">Loading topics…</p>
-            )}
+            {topics.length === 0 ? (
+              <p className="px-1 text-sm text-ink-subtle">
+                No sheets for this branch yet.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {topics.map((topic) => {
+                  const isActive = topic.id === activeTopic?.id;
+                  const complete =
+                    topic.problemCount > 0 && topic.solvedCount === topic.problemCount;
 
-            {topicsStatus === "error" && (
-              <p className="px-1 text-sm text-danger">Couldn&rsquo;t load topics.</p>
+                  return (
+                    <li key={topic.id}>
+                      <Link
+                        href={href({ topic: topic.id })}
+                        aria-current={isActive ? "page" : undefined}
+                        className={cn(
+                          "block rounded-card border px-4 py-3 transition-colors",
+                          isActive
+                            ? "border-accent bg-accent-soft"
+                            : "border-line bg-surface hover:border-line-strong",
+                        )}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span
+                            className={cn(
+                              "text-sm font-semibold",
+                              isActive ? "text-accent" : "text-ink",
+                            )}
+                          >
+                            {topic.name}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1 text-xs text-ink-subtle tabular-nums">
+                            {complete && (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                            )}
+                            {topic.solvedCount}/{topic.problemCount}
+                          </span>
+                        </span>
+                        <span className="mt-1 block text-xs text-ink-subtle">
+                          {topic.branch}
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-
-            <ul className="space-y-2">
-              {filteredTopics.map((topic) => {
-                const isActive = topic.id === activeTopicId;
-                return (
-                  <li key={topic.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTopicId(topic.id)}
-                      className={cn(
-                        "w-full cursor-pointer rounded-card border px-4 py-3 text-left transition-colors",
-                        isActive
-                          ? "border-accent bg-accent-soft"
-                          : "border-line bg-surface hover:border-line-strong",
-                      )}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span
-                          className={cn(
-                            "text-sm font-semibold",
-                            isActive ? "text-accent" : "text-ink",
-                          )}
-                        >
-                          {topic.name}
-                        </span>
-                        <span className="shrink-0 text-xs text-ink-subtle">
-                          {topic.totalProblems}
-                        </span>
-                      </span>
-                      <span className="mt-1 block text-xs text-ink-subtle">
-                        {topic.branch}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
           </aside>
         )}
 
@@ -288,14 +292,16 @@ export default function DSAPage() {
               <h2 className="text-lg font-semibold">
                 {mode === "curated"
                   ? (activeTopic?.name ?? "Problems")
-                  : CODEFORCES_TAGS.find((t) => t.tag === activeLiveTag)?.label}
+                  : (CODEFORCES_TAGS.find((t) => t.tag === tag)?.label ?? "Live problems")}
               </h2>
               <p className="mt-0.5 text-sm text-ink-muted">
-                {problemsStatus === "ready"
-                  ? `${visibleProblems.length} problems · ${solvedCount} ticked`
-                  : problemsStatus === "loading"
-                    ? "Loading…"
-                    : ""}
+                {mode === "curated"
+                  ? `${visibleCurated.length} problems · ${solvedCount} solved`
+                  : liveStatus === "ready"
+                    ? `${visibleLive.length} problems from the Codeforces API`
+                    : liveStatus === "loading"
+                      ? "Loading…"
+                      : ""}
               </p>
             </div>
 
@@ -312,32 +318,92 @@ export default function DSAPage() {
             </div>
           </div>
 
-          {activeTopic?.description && mode === "curated" && (
+          {mode === "curated" && activeTopic?.description && (
             <p className="mt-3 text-sm leading-relaxed text-ink-muted">
               {activeTopic.description}
             </p>
           )}
 
+          {saveFailed && (
+            <p
+              role="alert"
+              className="mt-4 rounded-input border border-danger-line bg-danger-soft px-4 py-3 text-sm text-danger"
+            >
+              That tick didn&rsquo;t save — your connection dropped, so it has been
+              put back. Try again.
+            </p>
+          )}
+
           <div className="mt-5">
-            {problemsStatus === "error" ? (
+            {mode === "curated" ? (
+              visibleCurated.length === 0 ? (
+                <EmptyState
+                  title={term ? "No problems match" : "No problems in this sheet yet"}
+                  description={
+                    term
+                      ? "Try a different search term or topic."
+                      : "Pick another topic from the list."
+                  }
+                />
+              ) : (
+                <Card className="divide-y divide-line overflow-hidden p-0">
+                  {visibleCurated.map((problem) => (
+                    <div
+                      key={problem.id}
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-inset"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={Boolean(solved[problem.id])}
+                        onChange={() => void toggleSolved(problem.id)}
+                        aria-label={`Mark ${problem.title} as solved`}
+                        className="h-4 w-4 shrink-0 cursor-pointer accent-[var(--color-accent)]"
+                      />
+
+                      <span
+                        className={cn(
+                          "min-w-0 flex-1 text-sm",
+                          solved[problem.id] ? "text-ink-subtle line-through" : "text-ink",
+                        )}
+                      >
+                        {problem.title}
+                      </span>
+
+                      <DifficultyBadge level={problem.difficulty} />
+
+                      {problem.link && (
+                        <a
+                          href={problem.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          aria-label={`Open ${problem.title} in a new tab`}
+                          className="shrink-0 text-ink-subtle transition-colors hover:text-accent"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </Card>
+              )
+            ) : liveStatus === "error" ? (
               <EmptyState
-                title="Couldn't load problems"
+                title="Couldn't load the live feed"
                 description={
-                  mode === "live"
-                    ? "The Codeforces API didn't respond. It rate-limits heavy use — wait a moment and try again."
-                    : "Something went wrong fetching this topic."
+                  liveError ??
+                  "The Codeforces API didn't respond. It rate-limits heavy use — wait a moment and try again."
                 }
                 action={
                   <Button
                     variant="secondary"
-                    onClick={() => setActiveLiveTag((t) => t)}
+                    onClick={() => setReloadToken((t) => t + 1)}
                   >
                     <RefreshCw className="h-4 w-4" />
                     Retry
                   </Button>
                 }
               />
-            ) : problemsStatus === "loading" ? (
+            ) : liveStatus === "loading" || liveStatus === "idle" ? (
               <div className="space-y-2">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div
@@ -346,48 +412,24 @@ export default function DSAPage() {
                   />
                 ))}
               </div>
-            ) : visibleProblems.length === 0 ? (
+            ) : visibleLive.length === 0 ? (
               <EmptyState
                 title="No problems match"
-                description="Try a different search term or topic."
+                description="Try a different search term or tag."
               />
             ) : (
-              <Card className="divide-y divide-line overflow-hidden p-0">
-                {visibleProblems.map((problem) => (
-                  <div
-                    key={problem.id}
-                    className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-inset"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={Boolean(solvedLocally[problem.id])}
-                      onChange={() =>
-                        setSolvedLocally((prev) => ({
-                          ...prev,
-                          [problem.id]: !prev[problem.id],
-                        }))
-                      }
-                      aria-label={`Mark ${problem.title} as solved`}
-                      className="h-4 w-4 shrink-0 cursor-pointer accent-[var(--color-accent)]"
-                    />
-
-                    <span
-                      className={cn(
-                        "min-w-0 flex-1 text-sm",
-                        solvedLocally[problem.id]
-                          ? "text-ink-subtle line-through"
-                          : "text-ink",
-                      )}
+              <>
+                <Card className="divide-y divide-line overflow-hidden p-0">
+                  {visibleLive.map((problem) => (
+                    <div
+                      key={problem.id}
+                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-inset"
                     >
-                      {problem.title}
-                    </span>
-
-                    {problem.rating && (
-                      <Badge tone="neutral">{problem.rating}</Badge>
-                    )}
-                    <DifficultyBadge level={problem.difficulty} />
-
-                    {problem.link && (
+                      <span className="min-w-0 flex-1 text-sm text-ink">
+                        {problem.title}
+                      </span>
+                      {problem.rating && <Badge tone="neutral">{problem.rating}</Badge>}
+                      <DifficultyBadge level={problem.difficulty} />
                       <a
                         href={problem.link}
                         target="_blank"
@@ -397,18 +439,17 @@ export default function DSAPage() {
                       >
                         <ExternalLink className="h-4 w-4" />
                       </a>
-                    )}
-                  </div>
-                ))}
-              </Card>
+                    </div>
+                  ))}
+                </Card>
+                <p className="mt-4 text-xs leading-relaxed text-ink-subtle">
+                  Live problems come straight from Codeforces and are not part of a
+                  curated sheet, so there is nothing to tick — your progress is
+                  tracked on the curated sheets only.
+                </p>
+              </>
             )}
           </div>
-
-          <p className="mt-5 rounded-card border border-line border-dashed bg-surface px-5 py-4 text-sm leading-relaxed text-ink-muted">
-            <span className="font-semibold text-ink">Ticks aren&rsquo;t saved yet.</span>{" "}
-            Marking a problem solved lasts for this visit only — per-user
-            progress needs a database table that doesn&rsquo;t exist yet.
-          </p>
         </div>
       </div>
     </Container>
