@@ -25,12 +25,15 @@ export default function DashboardMain({
   questionCount,
   packCount,
   progress,
+  dsaProgress,
 }: {
   user: DashboardUser;
   topicCount: number;
   questionCount: number;
   packCount: number;
   progress: ProgressSummary;
+  /** Curated DSA problems ticked, out of the number that exist. */
+  dsaProgress: { solved: number; total: number };
 }) {
   // Only the first name — "Welcome back, Mohit" reads better than the full
   // Google display name.
@@ -106,7 +109,11 @@ export default function DashboardMain({
           href="/dsa"
           icon={<Binary className="h-5 w-5" />}
           title="DSA problems"
-          body="Branch-wise curated sheets with LeetCode links, plus a live feed from the Codeforces API."
+          body={
+            dsaProgress.solved > 0
+              ? `${dsaProgress.solved} of ${dsaProgress.total} curated problems ticked, plus a live feed from the Codeforces API.`
+              : `${dsaProgress.total} curated problems across the branches, plus a live feed from the Codeforces API.`
+          }
         />
         <ModuleCard
           href={SCREEN_ROUTES.formulas}
@@ -184,7 +191,7 @@ function ModuleCard({
   href: string;
   icon: React.ReactNode;
   title: string;
-  body: string;
+  body: React.ReactNode;
 }) {
   return (
     <Link href={href} className="group block">
