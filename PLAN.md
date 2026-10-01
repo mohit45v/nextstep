@@ -241,8 +241,10 @@ old no-op PATCH route was worse than no route at all.
 
 ### Done when
 
-- [ ] Ticking a problem survives a refresh and a re-login
-- [ ] The "ticks aren't saved yet" notice is gone because it is no longer true
+- [x] Ticking a problem survives a refresh and a re-login — `ProblemSolve` is
+      unique on `(userId, problemId)`, so the toggle is idempotent and the count
+      on each sheet is a query
+- [x] The "ticks aren't saved yet" notice is gone because it is no longer true
 
 ---
 
@@ -274,9 +276,18 @@ a sandbox (no network, memory/CPU/time caps, non-root) · polling vs webhooks.
 
 ### Done when
 
-- [ ] You can run Python, JS, C++ and Java from the browser and see real output
-- [ ] An infinite loop times out cleanly instead of hanging the request
-- [ ] Swapping `CODE_RUNNER_URL` to a different Judge0 needs no code change
+- [ ] You can run Python, JS, C++ and Java from the browser and see real output —
+      **needs your Docker.** The seam, the playground and all four language
+      templates are built; `docker compose up -d` then
+      `CODE_RUNNER_URL="http://localhost:2358"` is what turns Run from "no runner
+      configured" into real output
+- [ ] An infinite loop times out cleanly instead of hanging the request — the
+      adapter maps Judge0's time-limit status to its own `time-limit` state and
+      gives up on its own 20s deadline if the judge never answers (both verified
+      against a scripted fake judge); confirm it end to end once Docker is up
+- [x] Swapping `CODE_RUNNER_URL` to a different Judge0 needs no code change — the
+      engine is chosen from the environment in `src/lib/code-runner/index.ts`, and
+      `judge0.ts` is the only file that knows Judge0 exists
 
 ---
 

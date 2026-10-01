@@ -246,6 +246,7 @@ src/
 | `npm run db:seed`      | Load / refresh the editorial content (idempotent)   |
 | `npm run db:studio`    | Browse the database in a GUI                        |
 | `npm run import:aqua`  | Import AQuA-RAT questions as drafts (see below)     |
+| `docker compose up -d` | Start the Judge0 code runner for `/playground`      |
 
 ---
 
@@ -315,6 +316,111 @@ read `obligations` in the registry before importing it.
 
 ---
 
+## The DSA hub
+
+Curated sheets live in `DsaTopic` / `DsaProblem`, and a tick is a row in
+`ProblemSolve`, unique on `(userId, problemId)`. That composite unique is what
+makes the toggle idempotent — ticking twice is one row, so a retried request
+after a flaky connection cannot double-count progress. The UI updates
+optimistically and rolls the tick back if the write fails, which is the opposite
+of what the old screen did (it showed progress that was never stored, and said so
+in a notice that is now gone).
+
+Branch, topic and mode are URL parameters, so the page is server-rendered with
+its sheet already in it. With no `?branch=`, your own degree programme picks the
+first sheet — `defaultBranchForProgramme` in
+[src/lib/dsa-labels.ts](src/lib/dsa-labels.ts) maps Terna's programmes onto the
+sheets, and anything it cannot place falls back to all branches.
+
+The **live feed** is proxied through `/api/dsa/external/codeforces`, which caches
+each tag for five minutes, times out after eight seconds and only accepts tags
+from a fixed list. Passing a query parameter straight through to a third party is
+a small open proxy, and it would also shatter the cache one unique tag at a time.
+
+---
+
+## The code runner
+
+`/playground` runs code in a sandboxed Judge0-compatible engine. The seam is
+[src/lib/code-runner/types.ts](src/lib/code-runner/types.ts): nothing above it
+knows which engine is running, and switching from local CodeBox to a hosted
+Judge0 is a `CODE_RUNNER_URL` change.
+
+```bash
+docker compose up -d
+```
+
+Then put the URL in `.env.local`:
+
+```
+CODE_RUNNER_URL="http://localhost:2358"
+```
+
+Without it the editor still works and the page says plainly that nothing can
+execute — a deployment with no Docker is a normal state for this project, not an
+error. Judge0 needs privileged containers (it uses cgroups and namespaces to
+isolate each submission), which is why the playground cannot run on Vercel.
+
+Running untrusted code is the most dangerous thing this app does, so:
+
+- Execution happens in a **separate service**, never in the Next.js process. An
+  infinite loop costs the judge a container, not the app.
+- Submissions are sent with `enable_network: false`, a CPU time limit and a
+  memory cap (`RUN_LIMITS`).
+- The route requires a session, bounds source and stdin length, accepts only the
+  four language ids it offers, and rate-limits each student to 20 runs a minute.
+- The adapter **polls** rather than holding a request open, and gives up on its
+  own deadline — a judge that never answers must not hang a request forever.
+
+Each outcome gets its own message: a compile error says the program never ran, a
+time limit points at a loop that never ends, and a judge failure says plainly
+that it is not your code.
+
+---
+
+## Performance notes
+
+Numbers measured against this project's Neon database from India, because the
+fix only makes sense once you know where the time goes:
+
+| What | Cost |
+| --- | --- |
+| Opening a new connection to Neon | **~3.1 s** |
+| A query on an already-open connection | ~255 ms |
+| Eight parallel queries on a warm pool | ~330 ms |
+
+Two consequences, both handled in [src/lib/prisma.ts](src/lib/prisma.ts):
+
+- **The pool is kept warm.** node-postgres closes idle connections after ten
+  seconds by default, so a quiet dev server paid three seconds on the next page —
+  and a page firing three queries in parallel opened three connections and paid it
+  three times. Connections now idle for five minutes, and a few are opened at
+  startup instead of making the first visitor wait.
+- **Transactions get a realistic deadline.** Prisma waits two seconds to acquire a
+  connection; on a cold pool that expires before a connection even exists, and the
+  work fails with a timeout that has nothing to do with the work. The importer
+  lost 12 of 36 questions to exactly this before the limits were raised.
+
+After that, the screens that were taking ~3.1 s settle at ~0.5 s, which is two
+round trips to the other side of the planet.
+
+**The remaining 255 ms is geography.** The database is in `us-east-2` and you are
+in India. Creating the Neon project in `ap-south-1` or `ap-southeast-1` would cut
+every query to tens of milliseconds — worth doing before the first real intake,
+and it costs a `db:migrate` plus a `db:seed` against the new project. In
+production, keep the app and the database in the same region and this disappears
+either way.
+
+Elsewhere the same principle applies: round trips are the latency, so pages fetch
+in parallel (`Promise.all`), per-topic accuracy is one grouped SQL query rather
+than a tally over every answer loaded into Node, an exam paper draws its
+candidates with one `IN` query rather than one per section, and the importer
+writes in batches of eight concurrent transactions (500 questions: ~11 minutes
+before, ~3 after). Routes that wait on the database stream a skeleton first via
+`loading.tsx`.
+
+---
+
 ## What is real
 
 The app deliberately shows nothing it cannot back up. Where a number isn't
@@ -330,10 +436,12 @@ measured, the screen says so instead of inventing one.
 | Per-topic accuracy, overall accuracy, time practised | Real — aggregated from your own `QuestionAttempt` rows |
 | Bookmarks | Real — one row per student per question |
 | Draft/approve question bank, importer, attributions | Real — `/admin/questions`, `/attributions` |
-| DSA curated problems and LeetCode links | Real content, served from a route handler |
-| Codeforces live problems | Real — proxied from the Codeforces API, cached 5 min |
+| DSA curated sheets | Real — in Postgres; sheets, problems and per-student ticks |
+| DSA solve ticks | Real — `ProblemSolve` rows; they survive a refresh and a re-login |
+| Codeforces live problems | Real — proxied, cached 5 min, 8s timeout, fixed tag list |
+| Code playground | Real **when a runner is configured**; without one the page says so and nothing executes |
+| Judged coding problems with test cases | **Not built.** Weekend 8 in [PLAN.md](PLAN.md) |
 | Streaks and leaderboard | **Not built.** Weekend 12 in [PLAN.md](PLAN.md) |
-| DSA solve ticks | Session-only, not persisted. The screen says so |
 
 A few deliberate honesty details worth knowing:
 
@@ -355,12 +463,11 @@ tighten it — the whole rule is that one constant.
 
 ### Planned
 
-Two larger features remain (see [PLAN.md](PLAN.md)):
+Still to come (see [PLAN.md](PLAN.md)):
 
-- **Code runner** — a `CodeRunner` interface written against the Judge0 API
-  shape, so the backend is swappable between self-hosted
-  [CodeBox](https://github.com/hiteshchoudhary/Codebox) (MIT), Judge0 CE, or a
-  hosted Judge0. It needs Docker and cannot run on Vercel.
+- **Judged problems** — `CodingProblem`, `TestCase` (with `isHidden`) and
+  `Submission`, plus a judge endpoint that runs every test case server-side.
+  Hidden test cases must never reach the browser. Needs the code runner running.
 - **Algorithm visualiser** — step-through animations recorded as frames, with
   narration and a brute-force-vs-optimised comparison showing measured operation
   counts.
